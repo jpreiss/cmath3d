@@ -185,7 +185,11 @@ struct mat33 {
 // construct a zero matrix.
 static inline struct mat33 mzero() {
 	struct mat33 m;
-	ZEROARR(m.m);
+	for (int i = 0; i < 3; ++i) {
+		for (int j = 0; j < 3; ++j) {
+			m.m[i][j] = 0;
+		}
+	}
 	return m;
 }
 // construct a matrix with the given diagonal.
@@ -224,9 +228,10 @@ static inline struct mat33 mcolumns(struct vec a, struct vec b, struct vec c) {
 // construct a matrix from three row vectors.
 static inline struct mat33 mrows(struct vec a, struct vec b, struct vec c) {
 	struct mat33 m;
-	vstoref(a, m[0]);
-	vstoref(b, m[1]);
-	vstoref(c, m[2]);
+	vstoref(a, m.m[0]);
+	vstoref(b, m.m[1]);
+	vstoref(c, m.m[2]);
+	return m;
 }
 // construct the matrix A from vector v such that Ax = cross(v, x)
 static inline struct mat33 mcrossmat(struct vec v) {
@@ -353,6 +358,7 @@ struct quat {
 	};
 	float w;
 };
+// TODO: remove anonymous union + struct for strict c99 compatibility
 
 //
 // constructors
