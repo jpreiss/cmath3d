@@ -114,13 +114,25 @@ static inline struct vec vnormalize(struct vec v) {
 static inline struct vec vcross(struct vec a, struct vec b) {
 	return mkvec(a.y*b.z - a.z*b.y, a.z*b.x - a.x*b.z, a.x*b.y - a.y*b.x);
 }
-// projection of a onto b, where b is a unit vector
+// projection of a onto b, where b is a unit vector.
 static inline struct vec vprojectunit(struct vec a, struct vec b_unit) {
 	return vscl(vdot(a, b_unit), b_unit);
 }
-// component of a orthogonal to b, where b is a unit vector
+// component of a orthogonal to b, where b is a unit vector.
 static inline struct vec vorthunit(struct vec a, struct vec b_unit) {
 	return vsub(a, vprojectunit(a, b_unit));
+}
+// element-wise absolute value of vector.
+static inline struct vec vabs(struct vec v) {
+	return mkvec(fabs(v.x), fabs(v.y), fabs(v.z));
+}
+// element-wise minimum of vector.
+static inline struct vec vmin(struct vec a, struct vec b) {
+	return mkvec(fminf(a.x, b.x), fminf(a.y, b.y), fminf(a.z, b.z));
+}
+// element-wise maximum of vector.
+static inline struct vec vmax(struct vec a, struct vec b) {
+	return mkvec(fmaxf(a.x, b.x), fmaxf(a.y, b.y), fmaxf(a.z, b.z));
 }
 
 //
@@ -134,6 +146,26 @@ static inline bool veq(struct vec a, struct vec b) {
 // compare two vectors for exact inequality.
 static inline bool vneq(struct vec a, struct vec b) {
 	return !veq(a, b);
+}
+// element-wise less-than
+static inline bool vless(struct vec a, struct vec b) {
+	return (a.x < b.x) && (a.y < b.y) && (a.z < b.z);
+}
+// element-wise less-than-or-equal
+static inline bool vleq(struct vec a, struct vec b) {
+	return (a.x <= b.x) && (a.y <= b.y) && (a.z <= b.z);
+}
+// element-wise greater-than
+static inline bool vgreater(struct vec a, struct vec b) {
+	return (a.x > b.x) && (a.y > b.y) && (a.z > b.z);
+}
+// element-wise greater-than-or-equal
+static inline bool vgeq(struct vec a, struct vec b) {
+	return (a.x >= b.x) && (a.y >= b.y) && (a.z >= b.z);
+}
+// test if any element of a vector is NaN.
+static inline bool visnan(struct vec v) {
+	return isnan(v.x) || isnan(v.y) || isnan(v.z);
 }
 
 //
@@ -169,7 +201,7 @@ static inline struct vec vloadf(float const *f) {
 static inline void vstoref(struct vec v, float *f) {
 	f[0] = v.x; f[1] = v.y; f[2] = v.z;
 }
-// Vector TODO: abs, min, max, fuzzy comparison
+// Vector TODO: fuzzy comparison
 
 
 // ---------------------------- 3x3 matrices ------------------------------
@@ -309,6 +341,13 @@ static inline struct mat33 msub(struct mat33 a, struct mat33 b) {
 	}
 	return c;
 }
+// multiply a matrix by a vector.
+static inline struct vec mvmult(struct mat33 a, struct vec v) {
+	float x = a.m[0][0] * v.x + a.m[0][1] * v.y + a.m[0][2] * v.z;
+	float y = a.m[1][0] * v.x + a.m[1][1] * v.y + a.m[1][2] * v.z;
+	float z = a.m[2][0] * v.x + a.m[2][1] * v.y + a.m[2][2] * v.z;
+	return mkvec(x, y, z);
+}
 // multiply two matrices.
 static inline struct mat33 mmult(struct mat33 a, struct mat33 b) {
 	struct mat33 ab;
@@ -330,6 +369,17 @@ static inline struct mat33 maddridge(struct mat33 a, float d) {
 	a.m[2][2] += d;
 	return a;
 }
+// test if any element of a matrix is NaN.
+static inline bool misnan(struct mat33 m) {
+	for (int i = 0; i < 3; ++i) {
+		for (int j = 0; j < 3; ++j) {
+			if (isnan(m.m[i][j])) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
 // set a 3x3 block within a big row-major matrix.
 // block: pointer to the upper-left element of the block in the big matrix.
 // stride: the number of columns in the big matrix.
@@ -342,23 +392,17 @@ static inline void set_block33_rowmaj(float *block, int stride, struct mat33 m) 
 	}
 }
 
-// Matrix TODO: mmultv, inv, solve, eig, raw floats
+// Matrix TODO: inv, solve, eig, raw floats, axis-aligned rotations
 
 
 // ---------------------------- quaternions ------------------------------
 
 struct quat {
-	union {
-		struct vec v;
-		struct {
-			float x;
-			float y;
-			float z;
-		};
-	};
+	float x;
+	float y;
+	float z;
 	float w;
 };
-// TODO: remove anonymous union + struct for strict c99 compatibility
 
 //
 // constructors
@@ -367,15 +411,14 @@ struct quat {
 // construct a quaternion from its x, y, z, w elements.
 static inline struct quat mkquat(float x, float y, float z, float w) {
 	struct quat q;
-	q.v = mkvec(x, y, z);
-	q.w = w;
+	q.x = x; q.y = y; q.z = z; q.w = w;
 	return q;
 }
 // construct a quaternion from a vector containing (x, y, z) and a scalar w.
 // note that this is NOT an axis-angle constructor.
 static inline struct quat quatvw(struct vec v, float w) {
 	struct quat q;
-	q.v = v;
+	q.x = v.x; q.y = v.y; q.z = v.z;
 	q.w = w;
 	return q;
 }
@@ -387,7 +430,9 @@ static inline struct quat qeye() {
 static inline struct quat qaxisangle(struct vec axis, float angle) {
 	float scale = sin(angle / 2) / vmag(axis);
 	struct quat q;
-	q.v = vscl(scale, axis);
+	q.x = scale * axis.x;
+	q.y = scale * axis.y;
+	q.z = scale * axis.z;
 	q.w = cos(angle/2);
 	return q;
 }
@@ -423,7 +468,7 @@ static inline struct vec quat2rpy(struct quat q) {
 static inline struct vec quat2axis(struct quat q) {
 	// TODO this is not numerically stable for tiny rotations
 	float s = 1.0f / sqrtf(1 - q.w * q.w);
-	return vscl(s, q.v);
+	return vscl(s, mkvec(q.x, q.y, q.z));
 }
 // compute the angle of a quaternion's axis-angle decomposition.
 static inline float quat2angle(struct quat q) {
@@ -456,14 +501,15 @@ static inline struct mat33 quat2rotmat(struct quat q) {
 // rotate a vector by a quaternion.
 static inline struct vec qvrot(struct quat q, struct vec v) {
 	// from http://gamedev.stackexchange.com/a/50545 - TODO find real citation
+	struct vec qv = mkvec(q.x, q.y, q.z);
 	return vadd3(
-		vscl(2.0f * vdot(q.v, v), q.v),
-		vscl(q.w * q.w - vdot(q.v, q.v), v),
-		vscl(2.0f * q.w, vcross(q.v, v))
+		vscl(2.0f * vdot(qv, v), qv),
+		vscl(q.w * q.w - vmag2(qv), v),
+		vscl(2.0f * q.w, vcross(qv, v))
 	);
 }
-// multiply (compose) two quaternions 
-// such that qvrot(qqmul(q, p), v) == qvrot(q, qvrot(p, v))
+// multiply (compose) two quaternions
+// such that qvrot(qqmul(q, p), v) == qvrot(q, qvrot(p, v)).
 static inline struct quat qqmul(struct quat q, struct quat p) {
 	float x =  q.w*p.x + q.z*p.y - q.y*p.z + q.x*p.w;
 	float y = -q.z*p.x + q.w*p.y + q.x*p.z + q.y*p.w;
@@ -471,15 +517,24 @@ static inline struct quat qqmul(struct quat q, struct quat p) {
 	float w = -q.x*p.x - q.y*p.y - q.z*p.z + q.w*p.w;
 	return mkquat(x, y, z, w);
 }
-// invert a quaternion
+// invert a quaternion.
 static inline struct quat qinv(struct quat q) {
-	return quatvw(vneg(q.v), q.w);
+	return mkquat(-q.x, -q.y, -q.z, q.w);
+}
+// negate a quaternion.
+// this represents the same rotation, but is still sometimes useful.
+static inline struct quat qneg(struct quat q) {
+	return mkquat(-q.x, -q.y, -q.z, -q.w);
+}
+// quaternion dot product. is cosine of angle between them.
+static inline float qdot(struct quat a, struct quat b) {
+	return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 }
 // normalize a quaternion.
 // typically used to mitigate precision errors.
 static inline struct quat qnormalize(struct quat q) {
-	float maginv = 1.0f / sqrtf(vmag2(q.v) + fsqr(q.w));
-	return quatvw(vscl(maginv, q.v), maginv * q.w);
+	float s = 1.0f / sqrtf(qdot(q, q));
+	return mkquat(s*q.x, s*q.y, s*q.z, s*q.w);
 }
 // update an attitude estimate quaternion with a reading from a gyroscope
 // over the timespan dt. Gyroscope is assumed (roll, pitch, yaw) 
@@ -491,11 +546,38 @@ static inline struct quat quat_gyro_update(struct quat quat, struct vec gyro, fl
 	double const p = (dt / 2) * gyro.y;
 	double const y = (dt / 2) * gyro.z;
 
-	q1.v.x =    quat.x + y*quat.y - p*quat.z + r*quat.w;
-	q1.v.y = -y*quat.x +   quat.y + r*quat.z + p*quat.w;
-	q1.v.z =  p*quat.x - r*quat.y +   quat.z + y*quat.w;
-	q1.w   = -r*quat.x - p*quat.y - y*quat.z +   quat.w;
+	q1.x =    quat.x + y*quat.y - p*quat.z + r*quat.w;
+	q1.y = -y*quat.x +   quat.y + r*quat.z + p*quat.w;
+	q1.z =  p*quat.x - r*quat.y +   quat.z + y*quat.w;
+	q1.w = -r*quat.x - p*quat.y - y*quat.z +   quat.w;
 	return q1;
+}
+// normalized linear interpolation. s should be between 0 and 1.
+static inline struct quat qnlerp(struct quat a, struct quat b, float t) {
+	float s = 1.0f - t;
+	return qnormalize(mkquat(
+		s*a.x + t*b.x, s*a.y + t*b.y, s*a.z + t*b.z, s*a.w + t*b.w));
+}
+// spherical linear interpolation. s should be between 0 and 1.
+static inline struct quat qslerp(struct quat a, struct quat b, float t)
+{
+	float dp = qdot(a, b);
+	if (dp < 0) {
+		dp = -dp;
+		b = qneg(b);
+	}
+
+	if (dp > 0.99f) {
+		// fall back to linear interpolation to avoid div-by-zero
+		return qnlerp(a, b, t);
+	}
+	else {
+		float theta = acos(dp);
+		float s = sin(theta * (1 - t)) / sin(theta);
+		t = sin(theta * t) / sin(theta);
+		return mkquat(
+			s*a.x + t*b.x, s*a.y + t*b.y, s*a.z + t*b.z, s*a.w + t*b.w);
+	}
 }
 
 //
@@ -519,4 +601,6 @@ static inline void qstoref(struct quat q, float *f) {
 	f[0] = q.x; f[1] = q.y; f[2] = q.z; f[3] = q.w;
 }
 
-// Quaternion TODO: rpy2quat, slerp
+// Quaternion TODO: rpy2quat
+
+// Overall TODO: lines? segments? planes? axis-aligned boxes? spheres?
