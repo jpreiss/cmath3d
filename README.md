@@ -1,12 +1,12 @@
 # cmath3d
-3d math library for C. Vectors, 3x3 matrices, quaternions.
+3d math library for C. Vectors, 3x3 matrices, quaternions. 32-bit floats.
 
 This library is intended for embedded projects where C++ is not used.
 In the author's opinion, C++'s feature set enables dramatically
 more readable 3d math code. However, many embedded projects stick with C
 by necessity or preference. The goal of this project is to create the
 best possible programmer experience within the constraints of C syntax.
-If it is missing something you need, feature requests are encouraged.
+**If cmath3d is missing something you need, feature requests are encouraged.**
 
 Unlike many other C libraries of this type, `cmath3d` passes arguments
 and returns results by value instead of by pointer and pointer-to-output.
@@ -17,7 +17,7 @@ This choice has several motivations:
 - reduces bugs by allowing more variables to be delcared `const`
 - gives the optimizing compiler complete knowledge about function semantics,
   theoretically enabling better optimizations 
-  (see [Chandler Carruth's talk](https://www.youtube.com/watch?v=eR34r7HOU14)
+  (see [Chandler Carruth's talk](https://www.youtube.com/watch?v=eR34r7HOU14))
 
 Although Carruth's talk implies that using these functions with inline, 
 header-only definitions -- thus hiding no code from the compiler 
