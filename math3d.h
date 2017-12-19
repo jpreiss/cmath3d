@@ -26,14 +26,18 @@ SOFTWARE.
 */
 
 #include <math.h>
-#include <stdbool.h> 
+#include <stdbool.h>
+
+#ifndef M_PI_F
+#define M_PI_F (3.14159265358979323846f)
+#endif
 
 
 // ----------------------------- scalars --------------------------------
 
 static inline float fsqr(float x) { return x * x; }
-static inline float radians(float degrees) { return (M_PI / 180.0) * degrees; }
-static inline float degrees(float radians) { return (180.0 / M_PI) * radians; }
+static inline float radians(float degrees) { return (M_PI_F / 180.0f) * degrees; }
+static inline float degrees(float radians) { return (180.0f / M_PI_F) * radians; }
 
 
 // ---------------------------- 3d vectors ------------------------------
@@ -57,7 +61,7 @@ static inline struct vec vrepeat(float x) {
 	return mkvec(x, x, x);
 }
 // construct a zero-vector.
-static inline struct vec vzero() {
+static inline struct vec vzero(void) {
 	return vrepeat(0.0f);
 }
 
@@ -134,6 +138,10 @@ static inline struct vec vmin(struct vec a, struct vec b) {
 static inline struct vec vmax(struct vec a, struct vec b) {
 	return mkvec(fmaxf(a.x, b.x), fmaxf(a.y, b.y), fmaxf(a.z, b.z));
 }
+// L1 norm (aka Minkowski, Taxicab, Manhattan norm) of a vector.
+static inline float vnorm1(struct vec v) {
+	return fabs(v.x) + fabs(v.y) + fabs(v.z);
+}
 
 //
 // comparisons
@@ -170,7 +178,7 @@ static inline bool visnan(struct vec v) {
 
 //
 // special functions to ease the pain of writing vector math in C.
-// 
+//
 
 // add 3 vectors.
 static inline struct vec vadd3(struct vec a, struct vec b, struct vec c) {
@@ -210,12 +218,12 @@ struct mat33 {
 	float m[3][3];
 };
 
-// 
+//
 // constructors
 //
 
 // construct a zero matrix.
-static inline struct mat33 mzero() {
+static inline struct mat33 mzero(void) {
 	struct mat33 m;
 	for (int i = 0; i < 3; ++i) {
 		for (int j = 0; j < 3; ++j) {
@@ -237,7 +245,7 @@ static inline struct mat33 eyescl(float a) {
 	return diag(a, a, a);
 }
 // construct an identity matrix.
-static inline struct mat33 eye() {
+static inline struct mat33 eye(void) {
 	return eyescl(1.0f);
 }
 // construct a matrix from three column vectors.
@@ -383,10 +391,10 @@ static inline bool misnan(struct mat33 m) {
 // set a 3x3 block within a big row-major matrix.
 // block: pointer to the upper-left element of the block in the big matrix.
 // stride: the number of columns in the big matrix.
-static inline void set_block33_rowmaj(float *block, int stride, struct mat33 m) {
+static inline void set_block33_rowmaj(float *block, int stride, struct mat33 const *m) {
 	for (int i = 0; i < 3; ++i) {
 		for (int j = 0; j < 3; ++j) {
-			block[j] = m.m[i][j];
+			block[j] = m->m[i][j];
 		}
 		block += stride;
 	}
@@ -423,18 +431,26 @@ static inline struct quat quatvw(struct vec v, float w) {
 	return q;
 }
 // construct an identity quaternion.
-static inline struct quat qeye() {
+static inline struct quat qeye(void) {
 	return mkquat(0, 0, 0, 1);
 }
 // construct a quaternion from an axis and angle of rotation.
 static inline struct quat qaxisangle(struct vec axis, float angle) {
-	float scale = sin(angle / 2) / vmag(axis);
+	float scale = sinf(angle / 2) / vmag(axis);
 	struct quat q;
 	q.x = scale * axis.x;
 	q.y = scale * axis.y;
 	q.z = scale * axis.z;
 	q.w = cos(angle/2);
 	return q;
+}
+static inline struct vec quataxis(struct quat q) {
+	// TODO this is not numerically stable for tiny rotations
+	float s = 1.0f / sqrtf(1 - q.w * q.w);
+	return vscl(s, mkvec(q.x, q.y, q.z));
+}
+static inline float quatangle(struct quat q) {
+	return 2 * acosf(q.w);
 }
 // APPROXIMATE conversion of small (roll, pitch, yaw) Euler angles
 // into a quaternion without computing any trig functions.
@@ -450,6 +466,9 @@ static inline struct quat rpy2quat_small(struct vec rpy) {
 		float w = 1.0f / sqrtf(1.0f + q2);
 		return quatvw(vscl(w/2, rpy), w);
 	}
+}
+static inline struct vec quatimagpart(struct quat q) {
+	return mkvec(q.x, q.y, q.z);
 }
 
 //
@@ -537,14 +556,14 @@ static inline struct quat qnormalize(struct quat q) {
 	return mkquat(s*q.x, s*q.y, s*q.z, s*q.w);
 }
 // update an attitude estimate quaternion with a reading from a gyroscope
-// over the timespan dt. Gyroscope is assumed (roll, pitch, yaw) 
+// over the timespan dt. Gyroscope is assumed (roll, pitch, yaw)
 // angular velocities in radians per second.
 static inline struct quat quat_gyro_update(struct quat quat, struct vec gyro, float const dt) {
 	// from "Indirect Kalman Filter for 3D Attitude Estimation", N. Trawny, 2005
 	struct quat q1;
-	double const r = (dt / 2) * gyro.x;
-	double const p = (dt / 2) * gyro.y;
-	double const y = (dt / 2) * gyro.z;
+	float const r = (dt / 2) * gyro.x;
+	float const p = (dt / 2) * gyro.y;
+	float const y = (dt / 2) * gyro.z;
 
 	q1.x =    quat.x + y*quat.y - p*quat.z + r*quat.w;
 	q1.y = -y*quat.x +   quat.y + r*quat.z + p*quat.w;
