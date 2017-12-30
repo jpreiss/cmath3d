@@ -155,19 +155,24 @@ static inline bool veq(struct vec a, struct vec b) {
 static inline bool vneq(struct vec a, struct vec b) {
 	return !veq(a, b);
 }
-// element-wise less-than
+// compare two vectors for near-equality with user-defined threshold.
+static inline bool veqepsilon(struct vec a, struct vec b, float epsilon) {
+	struct vec diffs = vabs(vsub(a, b));
+	return diffs.x < epsilon && diffs.y < epsilon && diffs.z < epsilon;
+}
+// all(element-wise less-than)
 static inline bool vless(struct vec a, struct vec b) {
 	return (a.x < b.x) && (a.y < b.y) && (a.z < b.z);
 }
-// element-wise less-than-or-equal
+// all(element-wise less-than-or-equal)
 static inline bool vleq(struct vec a, struct vec b) {
 	return (a.x <= b.x) && (a.y <= b.y) && (a.z <= b.z);
 }
-// element-wise greater-than
+// all(element-wise greater-than)
 static inline bool vgreater(struct vec a, struct vec b) {
 	return (a.x > b.x) && (a.y > b.y) && (a.z > b.z);
 }
-// element-wise greater-than-or-equal
+// all(element-wise greater-than-or-equal)
 static inline bool vgeq(struct vec a, struct vec b) {
 	return (a.x >= b.x) && (a.y >= b.y) && (a.z >= b.z);
 }
@@ -209,7 +214,6 @@ static inline struct vec vloadf(float const *f) {
 static inline void vstoref(struct vec v, float *f) {
 	f[0] = v.x; f[1] = v.y; f[2] = v.z;
 }
-// Vector TODO: fuzzy comparison
 
 
 // ---------------------------- 3x3 matrices ------------------------------
@@ -400,7 +404,7 @@ static inline void set_block33_rowmaj(float *block, int stride, struct mat33 con
 	}
 }
 
-// Matrix TODO: inv, solve, eig, raw floats, axis-aligned rotations
+// Matrix TODO: inv, solve, eig, 9 floats ctor, axis-aligned rotations
 
 
 // ---------------------------- quaternions ------------------------------
@@ -444,20 +448,31 @@ static inline struct quat qaxisangle(struct vec axis, float angle) {
 	q.w = cosf(angle/2);
 	return q;
 }
-static inline struct vec quataxis(struct quat q) {
-	// TODO this is not numerically stable for tiny rotations
-	float s = 1.0f / sqrtf(1 - q.w * q.w);
-	return vscl(s, mkvec(q.x, q.y, q.z));
+// construct from (roll, pitch, yaw) Euler angles using Tait-Bryan convention
+// (yaw, then pitch about new pitch axis, then roll about new roll axis)
+static inline struct quat rpy2quat(struct vec rpy) {
+	// from https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
+	float r = rpy.x;
+	float p = rpy.y;
+	float y = rpy.z;
+	float cr = cosf(r / 2.0f); float sr = sinf(r / 2.0f);
+	float cp = cosf(p / 2.0f); float sp = sinf(p / 2.0f);
+	float cy = cosf(y / 2.0f); float sy = sinf(y / 2.0f);
+
+	float qx = sr * cp * cy -  cr * sp * sy;
+	float qy = cr * sp * cy +  sr * cp * sy;
+	float qz = cr * cp * sy -  sr * sp * cy;
+	float qw = cr * cp * cy +  sr * sp * sy;
+
+	return mkquat(qx, qy, qz, qw);
 }
-static inline float quatangle(struct quat q) {
-	return 2 * acosf(q.w);
-}
-// APPROXIMATE conversion of small (roll, pitch, yaw) Euler angles
-// into a quaternion without computing any trig functions.
-// only produces useful result for small angles.
+// APPROXIMATE construction of a quaternion from small (roll, pitch, yaw) Euler angles
+// without computing any trig functions. only produces useful result for small angles.
 // Example application is integrating a gyroscope when the angular velocity
 // of the object is small compared to the sampling frequency.
 static inline struct quat rpy2quat_small(struct vec rpy) {
+	// TODO: cite source, but can be derived from rpy2quat under first-order approximation:
+	// sin(epsilon) = epsilon, cos(epsilon) = 1, epsilon^2 = 0
 	float q2 = vmag2(rpy) / 4.0f;
 	if (q2 < 1) {
 		return quatvw(vdiv(rpy, 2), sqrtf(1.0f - q2));
@@ -467,16 +482,15 @@ static inline struct quat rpy2quat_small(struct vec rpy) {
 		return quatvw(vscl(w/2, rpy), w);
 	}
 }
-static inline struct vec quatimagpart(struct quat q) {
-	return mkvec(q.x, q.y, q.z);
-}
 
 //
 // conversions to other parameterizations of 3D rotations
 //
 
-// convert quaternion to (roll, pitch, yaw) Euler angles
+// convert quaternion to (roll, pitch, yaw) Euler angles using Tait-Bryan convention
+// (yaw, then pitch about new pitch axis, then roll about new roll axis)
 static inline struct vec quat2rpy(struct quat q) {
+	// from https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
 	struct vec v;
 	v.x = atan2f(2.0f * (q.w * q.x + q.y * q.z), 1 - 2 * (fsqr(q.x) + fsqr(q.y))); // roll
 	v.y = asinf(2.0f * (q.w * q.y - q.x * q.z)); // pitch
@@ -493,8 +507,13 @@ static inline struct vec quat2axis(struct quat q) {
 static inline float quat2angle(struct quat q) {
 	return 2 * acosf(q.w);
 }
+// vector containing the imaginary part of the quaternion, i.e. (x, y, z)
+static inline struct vec quatimagpart(struct quat q) {
+	return mkvec(q.x, q.y, q.z);
+}
 // convert a quaternion into a 3x3 rotation matrix.
 static inline struct mat33 quat2rotmat(struct quat q) {
+	// from https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
 	float x = q.x;
 	float y = q.y;
 	float z = q.z;
@@ -580,6 +599,7 @@ static inline struct quat qnlerp(struct quat a, struct quat b, float t) {
 // spherical linear interpolation. s should be between 0 and 1.
 static inline struct quat qslerp(struct quat a, struct quat b, float t)
 {
+	// from "Animating Rotation with Quaternion Curves", Ken Shoemake, 1985
 	float dp = qdot(a, b);
 	if (dp < 0) {
 		dp = -dp;
@@ -619,7 +639,5 @@ static inline struct quat qloadf(float const *f) {
 static inline void qstoref(struct quat q, float *f) {
 	f[0] = q.x; f[1] = q.y; f[2] = q.z; f[3] = q.w;
 }
-
-// Quaternion TODO: rpy2quat
 
 // Overall TODO: lines? segments? planes? axis-aligned boxes? spheres?

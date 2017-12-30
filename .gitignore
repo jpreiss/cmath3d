@@ -1,3 +1,6 @@
+# test binary
+test_math3d
+
 # Object files
 *.o
 *.ko
