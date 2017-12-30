@@ -100,7 +100,7 @@ static inline float vmag2(struct vec v) {
 }
 // vector magnitude.
 static inline float vmag(struct vec v) {
-	return sqrt(vmag2(v));
+	return sqrtf(vmag2(v));
 }
 // vector Euclidean distance squared.
 static inline float vdist2(struct vec a, struct vec b) {
@@ -108,7 +108,7 @@ static inline float vdist2(struct vec a, struct vec b) {
 }
 // vector Euclidean distance.
 static inline float vdist(struct vec a, struct vec b) {
-  return sqrt(vdist2(a, b));
+  return sqrtf(vdist2(a, b));
 }
 // normalize a vector (make a unit vector).
 static inline struct vec vnormalize(struct vec v) {
@@ -128,7 +128,7 @@ static inline struct vec vorthunit(struct vec a, struct vec b_unit) {
 }
 // element-wise absolute value of vector.
 static inline struct vec vabs(struct vec v) {
-	return mkvec(fabs(v.x), fabs(v.y), fabs(v.z));
+	return mkvec(fabsf(v.x), fabsf(v.y), fabsf(v.z));
 }
 // element-wise minimum of vector.
 static inline struct vec vmin(struct vec a, struct vec b) {
@@ -140,7 +140,7 @@ static inline struct vec vmax(struct vec a, struct vec b) {
 }
 // L1 norm (aka Minkowski, Taxicab, Manhattan norm) of a vector.
 static inline float vnorm1(struct vec v) {
-	return fabs(v.x) + fabs(v.y) + fabs(v.z);
+	return fabsf(v.x) + fabsf(v.y) + fabsf(v.z);
 }
 
 //
@@ -199,7 +199,7 @@ static inline struct vec vload(double const *d) {
 }
 // store a vector into a double array.
 static inline void vstore(struct vec v, double *d) {
-	d[0] = v.x; d[1] = v.y; d[2] = v.z;
+	d[0] = (double)v.x; d[1] = (double)v.y; d[2] = (double)v.z;
 }
 // load a vector from a float array.
 static inline struct vec vloadf(float const *f) {
@@ -441,7 +441,7 @@ static inline struct quat qaxisangle(struct vec axis, float angle) {
 	q.x = scale * axis.x;
 	q.y = scale * axis.y;
 	q.z = scale * axis.z;
-	q.w = cos(angle/2);
+	q.w = cosf(angle/2);
 	return q;
 }
 static inline struct vec quataxis(struct quat q) {
@@ -478,20 +478,20 @@ static inline struct vec quatimagpart(struct quat q) {
 // convert quaternion to (roll, pitch, yaw) Euler angles
 static inline struct vec quat2rpy(struct quat q) {
 	struct vec v;
-	v.x = atan2(2 * (q.w * q.x + q.y * q.z), 1 - 2 * (fsqr(q.x) + fsqr(q.y))); // roll
-	v.y = asin(2 * (q.w * q.y - q.x * q.z)); // pitch
-	v.z = atan2(2 * (q.w * q.z + q.x * q.y), 1 - 2 * (fsqr(q.y) + fsqr(q.z))); // yaw
+	v.x = atan2f(2.0f * (q.w * q.x + q.y * q.z), 1 - 2 * (fsqr(q.x) + fsqr(q.y))); // roll
+	v.y = asinf(2.0f * (q.w * q.y - q.x * q.z)); // pitch
+	v.z = atan2f(2.0f * (q.w * q.z + q.x * q.y), 1 - 2 * (fsqr(q.y) + fsqr(q.z))); // yaw
 	return v;
 }
 // compute the axis of a quaternion's axis-angle decomposition.
 static inline struct vec quat2axis(struct quat q) {
 	// TODO this is not numerically stable for tiny rotations
-	float s = 1.0f / sqrtf(1 - q.w * q.w);
+	float s = 1.0f / sqrtf(1.0f - q.w * q.w);
 	return vscl(s, mkvec(q.x, q.y, q.z));
 }
 // compute the angle of a quaternion's axis-angle decomposition.
 static inline float quat2angle(struct quat q) {
-	return 2 * acos(q.w);
+	return 2 * acosf(q.w);
 }
 // convert a quaternion into a 3x3 rotation matrix.
 static inline struct mat33 quat2rotmat(struct quat q) {
@@ -591,9 +591,9 @@ static inline struct quat qslerp(struct quat a, struct quat b, float t)
 		return qnlerp(a, b, t);
 	}
 	else {
-		float theta = acos(dp);
-		float s = sin(theta * (1 - t)) / sin(theta);
-		t = sin(theta * t) / sin(theta);
+		float theta = acosf(dp);
+		float s = sinf(theta * (1 - t)) / sinf(theta);
+		t = sinf(theta * t) / sinf(theta);
 		return mkquat(
 			s*a.x + t*b.x, s*a.y + t*b.y, s*a.z + t*b.z, s*a.w + t*b.w);
 	}
@@ -609,7 +609,7 @@ static inline struct quat qload(double const *d) {
 }
 // store a quaternion into a raw double array.
 static inline void qstore(struct quat q, double *d) {
-	d[0] = q.x; d[1] = q.y; d[2] = q.z; d[3] = q.w;
+	d[0] = (double)q.x; d[1] = (double)q.y; d[2] = (double)q.z; d[3] = (double)q.w;
 }
 // load a quaternion from a raw float array.
 static inline struct quat qloadf(float const *f) {
