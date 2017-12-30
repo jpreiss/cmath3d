@@ -32,4 +32,4 @@ optimal code from this library.
 
 ## note for users
 If you use `cmath3d` in your project,
-I would very much appreciate it if you leave a comment in #2.
+I would very much appreciate it if you leave a comment in [#2](https://github.com/jpreiss/cmath3d/issues/2).
