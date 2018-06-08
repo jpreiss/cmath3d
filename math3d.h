@@ -38,6 +38,11 @@ SOFTWARE.
 static inline float fsqr(float x) { return x * x; }
 static inline float radians(float degrees) { return (M_PI_F / 180.0f) * degrees; }
 static inline float degrees(float radians) { return (180.0f / M_PI_F) * radians; }
+static inline float clamp(float value, float min, float max) {
+  if (value < min) return min;
+  if (value > max) return max;
+  return value;
+}
 
 
 // ---------------------------- 3d vectors ------------------------------
@@ -94,6 +99,14 @@ static inline struct vec vsub(struct vec a, struct vec b) {
 static inline float vdot(struct vec a, struct vec b) {
 	return a.x * b.x + a.y * b.y + a.z * b.z;
 }
+// element-wise vector multiply.
+static inline struct vec veltmul(struct vec a, struct vec b) {
+	return mkvec(a.x * b.x, a.y * b.y, a.z * b.z);
+}
+// element-wise vector divide.
+static inline struct vec veltdiv(struct vec a, struct vec b) {
+	return mkvec(a.x / b.x, a.y / b.y, a.z / b.z);
+}
 // vector magnitude squared.
 static inline float vmag2(struct vec v) {
 	return vdot(v, v);
@@ -137,6 +150,14 @@ static inline struct vec vmin(struct vec a, struct vec b) {
 // element-wise maximum of vector.
 static inline struct vec vmax(struct vec a, struct vec b) {
 	return mkvec(fmaxf(a.x, b.x), fmaxf(a.y, b.y), fmaxf(a.z, b.z));
+}
+// element-wise clamp of vector.
+static inline struct vec vclamp(struct vec v, struct vec lower, struct vec upper) {
+	return vmin(upper, vmax(v, lower));
+}
+// element-wise clamp of vector to range centered on zero.
+static inline struct vec vclampabs(struct vec v, struct vec abs_upper) {
+	return vclamp(v, vneg(abs_upper), abs_upper);
 }
 // L1 norm (aka Minkowski, Taxicab, Manhattan norm) of a vector.
 static inline float vnorm1(struct vec v) {
@@ -189,6 +210,11 @@ static inline bool visnan(struct vec v) {
 static inline struct vec vadd3(struct vec a, struct vec b, struct vec c) {
 	return vadd(vadd(a, b), c);
 }
+// add 4 vectors.
+static inline struct vec vadd4(struct vec a, struct vec b, struct vec c, struct vec d) {
+	// TODO: make sure it compiles to optimal code
+	return vadd(vadd(vadd(a, b), c), d);
+}
 // subtract b and c from a.
 static inline struct vec vsub2(struct vec a, struct vec b, struct vec c) {
 	return vadd3(a, vneg(b), vneg(c));
@@ -237,7 +263,7 @@ static inline struct mat33 mzero(void) {
 	return m;
 }
 // construct a matrix with the given diagonal.
-static inline struct mat33 diag(float a, float b, float c) {
+static inline struct mat33 mdiag(float a, float b, float c) {
 	struct mat33 m = mzero();
 	m.m[0][0] = a;
 	m.m[1][1] = b;
@@ -245,12 +271,12 @@ static inline struct mat33 diag(float a, float b, float c) {
 	return m;
 }
 // construct the matrix a * I for scalar a.
-static inline struct mat33 eyescl(float a) {
-	return diag(a, a, a);
+static inline struct mat33 meyescl(float a) {
+	return mdiag(a, a, a);
 }
 // construct an identity matrix.
-static inline struct mat33 eye(void) {
-	return eyescl(1.0f);
+static inline struct mat33 meye(void) {
+	return meyescl(1.0f);
 }
 // construct a matrix from three column vectors.
 static inline struct mat33 mcolumns(struct vec a, struct vec b, struct vec c) {
