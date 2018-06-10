@@ -422,6 +422,7 @@ static inline bool misnan(struct mat33 m) {
 	}
 	return false;
 }
+
 // set a 3x3 block within a big row-major matrix.
 // block: pointer to the upper-left element of the block in the big matrix.
 // stride: the number of columns in the big matrix.
@@ -597,6 +598,9 @@ static inline struct quat qneg(struct quat q) {
 // quaternion dot product. is cosine of angle between them.
 static inline float qdot(struct quat a, struct quat b) {
 	return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+}
+static inline float qanglebetween(struct quat a, struct quat b) {
+	return acosf(qdot(a, b));
 }
 // normalize a quaternion.
 // typically used to mitigate precision errors.
