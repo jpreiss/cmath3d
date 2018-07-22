@@ -17,6 +17,11 @@ float randu(float a, float b) {
 	return (float)x;
 }
 
+// returns a random vector uniformly sampled from the unit cube
+struct vec randcube() {
+	return mkvec(randu(-1.0f, 1.0f), randu(-1.0f, 1.0f), randu(-1.0f, 1.0f));
+}
+
 void printvec(struct vec v) {
 	printf("%f, %f, %f", (double)v.x, (double)v.y, (double)v.z);
 }
@@ -47,12 +52,39 @@ void test_quat_rpy_conversions()
 		struct vec rpy1 = quat2rpy(rpy2quat(rpy0));
 		ASSERT_VEQ_EPSILON(rpy0, rpy1, 0.00001f); // must be fairly loose due to 32 bit trig, etc.
 	}
+	printf("%s passed\n", __func__);
+}
+
+void test_qvectovec()
+{
+	srand(0); // deterministic
+	int const N = 10000;
+	struct quat const qzero = mkquat(0.0f, 0.0f, 0.0f, 0.0f);
+
+	for (int i = 0; i < N; ++i) {
+		struct vec a = randcube(), b = randcube();
+		// do not try to normalize tiny vectors.
+		if (vmag2(a) < 1e-8 || vmag2(b) < 1e-8) continue;
+		a = vnormalize(a);
+		b = vnormalize(b);
+		// degenerate case - test explicitly, not accidentally.
+		if (vdot(a, b) < -0.99f) continue;
+		// should return zero vector for degenerate case.
+		assert(qeq(qvectovec(a, vneg(a)), qzero));
+
+		// non-degenerate case.
+		struct quat const q = qvectovec(a, b);
+		struct vec const qa = qvrot(q, a);
+		ASSERT_VEQ_EPSILON(qa, b, 0.00001f); 
+	}
+	printf("%s passed\n", __func__);
 }
 
 // micro test framework
 typedef void (*voidvoid_fn)(void);
 voidvoid_fn test_fns[] = {
 	test_quat_rpy_conversions,
+	test_qvectovec,
 };
 
 static int i_test = -1;

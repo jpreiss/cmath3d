@@ -470,6 +470,7 @@ static inline struct quat qeye(void) {
 	return mkquat(0, 0, 0, 1);
 }
 // construct a quaternion from an axis and angle of rotation.
+// does not assume axis is normalized.
 static inline struct quat qaxisangle(struct vec axis, float angle) {
 	float scale = sinf(angle / 2) / vmag(axis);
 	struct quat q;
@@ -478,6 +479,30 @@ static inline struct quat qaxisangle(struct vec axis, float angle) {
 	q.z = scale * axis.z;
 	q.w = cosf(angle/2);
 	return q;
+}
+// construct a quaternion such that q * a = b,
+// and the rotation axis is orthogonal to the plane defined by a and b,
+// and the rotation is less than 180 degrees.
+// assumes a and b are unit vectors.
+// does not handle degenerate case where a = -b. returns all-zero quat
+static inline struct quat qvectovec(struct vec a, struct vec b) {
+	struct vec const cross = vcross(a, b);
+	float const sinangle = vmag(cross);
+	float const cosangle = vdot(a, b);
+	// avoid taking sqrt of negative number due to floating point error.
+	// TODO: find tighter exact bound
+	float const EPS_ANGLE = 1e-6;
+	if (sinangle < EPS_ANGLE) {
+		if (cosangle > 0.0f) return qeye();
+		else return mkquat(0.0f, 0.0f, 0.0f, 0.0f); // degenerate
+	}
+	float const halfcos = 0.5f * cosangle;
+	// since angle is < 180deg, the positive sqrt is always correct
+	float const sinhalfangle = sqrtf(0.5f - halfcos);
+	float const coshalfangle = sqrtf(0.5f + halfcos);
+	struct vec const qimag = vscl(sinhalfangle / sinangle, cross);
+	float const qreal = coshalfangle;
+	return quatvw(qimag, qreal);
 }
 // construct from (roll, pitch, yaw) Euler angles using Tait-Bryan convention
 // (yaw, then pitch about new pitch axis, then roll about new roll axis)
@@ -601,6 +626,9 @@ static inline float qdot(struct quat a, struct quat b) {
 }
 static inline float qanglebetween(struct quat a, struct quat b) {
 	return acosf(qdot(a, b));
+}
+static inline bool qeq(struct quat a, struct quat b) {
+	return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w;
 }
 // normalize a quaternion.
 // typically used to mitigate precision errors.
