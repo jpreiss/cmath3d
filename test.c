@@ -22,6 +22,13 @@ struct vec randcube() {
 	return mkvec(randu(-1.0f, 1.0f), randu(-1.0f, 1.0f), randu(-1.0f, 1.0f));
 }
 
+// returns a random quaternion not necessarily uniformly sampled
+struct quat randquat() {
+	struct quat q = mkquat(
+		randu(-1.0f, 1.0f), randu(-1.0f, 1.0f), randu(-1.0f, 1.0f), randu(-1.0f, 1.0f));
+	return qnormalize(q);
+}
+
 void printvec(struct vec v) {
 	printf("%f, %f, %f", (double)v.x, (double)v.y, (double)v.z);
 }
@@ -55,6 +62,20 @@ void test_quat_rpy_conversions()
 	printf("%s passed\n", __func__);
 }
 
+void test_quat_mat_conversions()
+{
+	srand(0); // deterministic
+	int const N = 10000;
+	for (int i = 0; i < N; ++i) {
+		struct quat const q = randquat();
+		struct mat33 const m = quat2rotmat(q);
+		struct quat const qq = mat2quat(m);
+		float const angle = qanglebetween(q, qq);
+		assert(fabs(angle) < radians(1e-1));
+	}
+	printf("%s passed\n", __func__);
+}
+
 void test_qvectovec()
 {
 	srand(0); // deterministic
@@ -76,6 +97,10 @@ void test_qvectovec()
 		struct quat const q = qvectovec(a, b);
 		struct vec const qa = qvrot(q, a);
 		ASSERT_VEQ_EPSILON(qa, b, 0.00001f); 
+
+		struct vec cross = vcross(a, b);
+		struct vec const qcross = qvrot(q, cross);
+		ASSERT_VEQ_EPSILON(qcross, cross, 0.00001f); 
 	}
 	printf("%s passed\n", __func__);
 }
@@ -84,6 +109,7 @@ void test_qvectovec()
 typedef void (*voidvoid_fn)(void);
 voidvoid_fn test_fns[] = {
 	test_quat_rpy_conversions,
+	test_quat_mat_conversions,
 	test_qvectovec,
 };
 

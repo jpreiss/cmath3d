@@ -29,7 +29,9 @@ SOFTWARE.
 #include <stdbool.h>
 
 #ifndef M_PI_F
-#define M_PI_F (3.14159265358979323846f)
+#define M_PI_F   (3.14159265358979323846f)
+#define M_1_PI_F (0.31830988618379067154f)
+#define M_PI_2_F (1.57079632679f)
 #endif
 
 
@@ -480,6 +482,10 @@ static inline struct quat qaxisangle(struct vec axis, float angle) {
 	q.w = cosf(angle/2);
 	return q;
 }
+
+// fwd declare, needed in some ctors
+static inline struct quat qnormalize(struct quat q);
+
 // construct a quaternion such that q * a = b,
 // and the rotation axis is orthogonal to the plane defined by a and b,
 // and the rotation is less than 180 degrees.
@@ -498,8 +504,8 @@ static inline struct quat qvectovec(struct vec a, struct vec b) {
 	}
 	float const halfcos = 0.5f * cosangle;
 	// since angle is < 180deg, the positive sqrt is always correct
-	float const sinhalfangle = sqrtf(0.5f - halfcos);
-	float const coshalfangle = sqrtf(0.5f + halfcos);
+	float const sinhalfangle = sqrtf(fmax(0.5f - halfcos, 0.0f));
+	float const coshalfangle = sqrtf(fmax(0.5f + halfcos, 0.0f));
 	struct vec const qimag = vscl(sinhalfangle / sinangle, cross);
 	float const qreal = coshalfangle;
 	return quatvw(qimag, qreal);
@@ -538,6 +544,17 @@ static inline struct quat rpy2quat_small(struct vec rpy) {
 		return quatvw(vscl(w/2, rpy), w);
 	}
 }
+// construct quaternion from orthonormal matrix.
+static inline struct quat mat2quat(struct mat33 m) {
+	float w = sqrtf(fmax(0.0f, 1.0f + m.m[0][0] + m.m[1][1] + m.m[2][2])) / 2.0f;
+	float x = sqrtf(fmax(0.0f, 1.0f + m.m[0][0] - m.m[1][1] - m.m[2][2])) / 2.0f;
+	float y = sqrtf(fmax(0.0f, 1.0f - m.m[0][0] + m.m[1][1] - m.m[2][2])) / 2.0f;
+	float z = sqrtf(fmax(0.0f, 1.0f - m.m[0][0] - m.m[1][1] + m.m[2][2])) / 2.0f;
+	x = copysign(x, m.m[2][1] - m.m[1][2]);
+	y = copysign(y, m.m[0][2] - m.m[2][0]);
+	z = copysign(z, m.m[1][0] - m.m[0][1]);
+	return mkquat(x, y, z, w);
+}
 
 //
 // conversions to other parameterizations of 3D rotations
@@ -560,8 +577,13 @@ static inline struct vec quat2axis(struct quat q) {
 	return vscl(s, mkvec(q.x, q.y, q.z));
 }
 // compute the angle of a quaternion's axis-angle decomposition.
+// result lies in domain (-pi, pi].
 static inline float quat2angle(struct quat q) {
-	return 2 * acosf(q.w);
+	float angle = 2 * acosf(q.w);
+	if (angle > M_PI_F) {
+		angle -= 2.0f * M_PI_F;
+	}
+	return angle;
 }
 // vector containing the imaginary part of the quaternion, i.e. (x, y, z)
 static inline struct vec quatimagpart(struct quat q) {
@@ -620,12 +642,19 @@ static inline struct quat qinv(struct quat q) {
 static inline struct quat qneg(struct quat q) {
 	return mkquat(-q.x, -q.y, -q.z, -q.w);
 }
+static inline struct quat qposreal(struct quat q) {
+	if (q.w < 0) return qneg(q);
+	return q;
+}
 // quaternion dot product. is cosine of angle between them.
 static inline float qdot(struct quat a, struct quat b) {
 	return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 }
 static inline float qanglebetween(struct quat a, struct quat b) {
-	return acosf(qdot(a, b));
+	float const dot = qdot(qposreal(a), qposreal(b));
+	if (dot > 1.0f - 1e9f) return 0.0f;
+	if (dot < -1.0f + 1e9f) return M_PI_F;
+	return acosf(dot);
 }
 static inline bool qeq(struct quat a, struct quat b) {
 	return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w;
