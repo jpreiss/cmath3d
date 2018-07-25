@@ -71,7 +71,7 @@ void test_quat_mat_conversions()
 		struct mat33 const m = quat2rotmat(q);
 		struct quat const qq = mat2quat(m);
 		float const angle = qanglebetween(q, qq);
-		assert(fabs(angle) < radians(1e-1));
+		assert(fabs(angle) < radians(1e-4));
 	}
 	printf("%s passed\n", __func__);
 }
