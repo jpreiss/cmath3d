@@ -4,7 +4,7 @@
 The MIT License (MIT)
 
 cmath3d
-Copyright (c) 2016 James Alan Preiss
+Copyright (c) 2016-2018 James Alan Preiss
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -164,6 +164,14 @@ static inline struct vec vclamp(struct vec v, struct vec lower, struct vec upper
 // element-wise clamp of vector to range centered on zero.
 static inline struct vec vclampabs(struct vec v, struct vec abs_upper) {
 	return vclamp(v, vneg(abs_upper), abs_upper);
+}
+// largest scalar element of vector.
+static inline float vmaxelt(struct vec v) {
+	return fmax(fmax(v.x, v.y), v.z);
+}
+// least (most negative) scalar element of vector.
+static inline float vminelt(struct vec v) {
+	return fmin(fmin(v.x, v.y), v.z);
 }
 // L1 norm (aka Minkowski, Taxicab, Manhattan norm) of a vector.
 static inline float vnorm1(struct vec v) {
@@ -642,6 +650,9 @@ static inline struct quat qinv(struct quat q) {
 static inline struct quat qneg(struct quat q) {
 	return mkquat(-q.x, -q.y, -q.z, -q.w);
 }
+// return a quaternion representing the same rotation
+// but with a positive real term (q.w).
+// useful to collapse the double-covering of SO(3) by the quaternions.
 static inline struct quat qposreal(struct quat q) {
 	if (q.w < 0) return qneg(q);
 	return q;
@@ -652,6 +663,7 @@ static inline float qdot(struct quat a, struct quat b) {
 }
 static inline float qanglebetween(struct quat a, struct quat b) {
 	float const dot = qdot(qposreal(a), qposreal(b));
+	// prevent acos domain issues
 	if (dot > 1.0f - 1e9f) return 0.0f;
 	if (dot < -1.0f + 1e9f) return M_PI_F;
 	return acosf(dot);
