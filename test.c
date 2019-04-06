@@ -17,9 +17,21 @@ float randu(float a, float b) {
 	return (float)x;
 }
 
+// APPROXIMATELY unit normal random number
+float randn() {
+	// central limit theorem at work
+	return randu(-1.0f, 1.0f) + randu(-1.0f, 1.0f) + randu(-1.0f, 1.0f);
+}
+
 // returns a random vector uniformly sampled from the unit cube
 struct vec randcube() {
 	return mkvec(randu(-1.0f, 1.0f), randu(-1.0f, 1.0f), randu(-1.0f, 1.0f));
+}
+
+// returns a random vector approximately uniformly sampled from the unit sphere
+struct vec randsphere() {
+	struct vec v = mkvec(randn(), randn(), randn());
+	return vnormalize(v);
 }
 
 // returns a random quaternion not necessarily uniformly sampled
@@ -46,6 +58,33 @@ do { \
 //
 // tests - when adding new tests, make sure to add to test_fns array
 //
+
+void test_mat_axisangle()
+{
+	srand(0); // deterministic
+	int const N = 10000;
+
+	for (int i = 0; i < N; ++i) {
+		// random rotation axis and point to rotate
+		struct vec const axis = randsphere();
+		struct vec const point = randsphere();
+
+		// rotation angle s.t. we will go a full circle
+		int const divisions = randu(0.0, 100.0);
+		float const theta = 2.0f * M_PI_F / divisions;
+
+		// rotate the point in a full circle
+		struct vec pointrot = point;
+		struct mat33 const R = maxisangle(axis, theta);
+		for (int j = 0; j < divisions; ++j) {
+			pointrot = mvmul(R, pointrot);
+		}
+
+		// should be back where we started
+		ASSERT_VEQ_EPSILON(point, pointrot, 0.00001f); // must be fairly loose due to 32 bit trig, etc.
+	}
+	printf("%s passed\n", __func__);
+}
 
 void test_quat_rpy_conversions()
 {
@@ -108,6 +147,7 @@ void test_qvectovec()
 // micro test framework
 typedef void (*voidvoid_fn)(void);
 voidvoid_fn test_fns[] = {
+	test_mat_axisangle,
 	test_quat_rpy_conversions,
 	test_quat_mat_conversions,
 	test_qvectovec,
