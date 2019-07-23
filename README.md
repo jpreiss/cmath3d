@@ -16,7 +16,7 @@ This choice has several motivations:
 
 - avoids the need to name non-meaningful intermediate results for the sake of taking their address
 - enables nested expressions
-- reduces bugs by allowing more variables to be delcared `const`
+- reduces bugs by allowing more variables to be declared `const`
 - gives the optimizing compiler complete knowledge about function semantics,
   theoretically enabling better optimizations 
   (see [Chandler Carruth's talk](https://www.youtube.com/watch?v=eR34r7HOU14))
