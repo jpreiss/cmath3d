@@ -227,7 +227,7 @@ static inline struct vec vadd3(struct vec a, struct vec b, struct vec c) {
 // add 4 vectors.
 static inline struct vec vadd4(struct vec a, struct vec b, struct vec c, struct vec d) {
 	// TODO: make sure it compiles to optimal code
-	return vadd(vadd(vadd(a, b), c), d);
+	return vadd(vadd(a, b), vadd(c, d));
 }
 // subtract b and c from a.
 static inline struct vec vsub2(struct vec a, struct vec b, struct vec c) {
