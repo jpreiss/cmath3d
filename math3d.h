@@ -235,7 +235,7 @@ static inline struct vec vsub2(struct vec a, struct vec b, struct vec c) {
 }
 
 //
-// conversion to/from raw float and double arrays.
+// conversion to/from raw float and double arrays; array-like access.
 //
 
 // load a vector from a double array.
@@ -253,6 +253,10 @@ static inline struct vec vloadf(float const *f) {
 // store a vector into a float array.
 static inline void vstoref(struct vec v, float *f) {
 	f[0] = v.x; f[1] = v.y; f[2] = v.z;
+}
+// index a vector like a 3-element array.
+static inline float vindex(struct vec v, int i) {
+	return ((float const *)&v.x)[i];
 }
 
 

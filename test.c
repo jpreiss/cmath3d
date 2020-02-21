@@ -59,6 +59,16 @@ do { \
 // tests - when adding new tests, make sure to add to test_fns array
 //
 
+void test_vec_basic()
+{
+	struct vec v = mkvec(1.0f, 2.0f, 3.0f);
+	assert(vindex(v, 0) == 1.0f);
+	assert(vindex(v, 1) == 2.0f);
+	assert(vindex(v, 2) == 3.0f);
+
+	printf("%s passed\n", __func__);
+}
+
 void test_mat_axisangle()
 {
 	srand(0); // deterministic
@@ -147,6 +157,7 @@ void test_qvectovec()
 // micro test framework
 typedef void (*voidvoid_fn)(void);
 voidvoid_fn test_fns[] = {
+	test_vec_basic,
 	test_mat_axisangle,
 	test_quat_rpy_conversions,
 	test_quat_mat_conversions,
