@@ -154,6 +154,68 @@ void test_qvectovec()
 	printf("%s passed\n", __func__);
 }
 
+void test_polytope()
+{
+	srand(1); // deterministic
+
+	// For each polytope, generate a few points, project them,
+	// and check that the projections are closer than other points.
+	int const N_POLYTOPES = 100;
+	int const N_PROJECTIONS = 10;
+	int const N_OTHERS = 1000;
+
+	int const MAX_FACES = 30;
+	float *A = malloc(sizeof(float) * MAX_FACES * 3);
+	float *b = malloc(sizeof(float) * MAX_FACES);
+	float *work = malloc(sizeof(float) * MAX_FACES * 3);
+
+
+	for (int trial = 0; trial < N_POLYTOPES; ++trial) {
+
+		// Random number of polytope faces.
+		int n = rand() % MAX_FACES + 1;
+
+		// If we generate random Ax <= b with b always positive, we ensure that
+		// x = 0 is always a solution; hence the polytope is non-empty. However,
+		// we also want to test nonempty polytopes that don't contain x = 0.
+		// Therefore, we use A(x + shift) <= b with b positive, which is
+		// equivalent to Ax <= b - Ashift.
+		struct vec shift = randsphere();
+
+		for (int i = 0; i < n; ++i) {
+			struct vec a = randsphere();
+			vstoref(a, A + 3 * i);
+			b[i] = randu(0.01, 10) - vdot(a, shift);
+		}
+
+		for (int point = 0; point < N_PROJECTIONS; ++point) {
+			struct vec x = randsphere();
+			struct vec xp = vprojectpolytope(x, A, b, work, n, 1e-6);
+
+			// Feasibility check: projection is inside polytope.
+			// The tolerance is looser than the vprojectpolytope tolerance
+			// because that tolerance doesn't actually guarantee a rigid bound
+			// on constraint violations.
+			assert(vinpolytope(xp, A, b, n, 1e-5));
+
+			// Optimality check: projection is closer than other random points
+			// to query point. Very large N_OTHERS would be more thorough...
+			for (int other = 0; other < N_OTHERS; ++other) {
+				struct vec other = vadd(randsphere(), shift);
+				if (vinpolytope(other, A, b, n, 0.0f)) {
+					assert (vdist2(xp, x) <= vdist2(other, x));
+				}
+			}
+		}
+	}
+
+	free(A);
+	free(b);
+	free(work);
+
+	printf("%s passed\n", __func__);
+}
+
 // micro test framework
 typedef void (*voidvoid_fn)(void);
 voidvoid_fn test_fns[] = {
@@ -162,6 +224,7 @@ voidvoid_fn test_fns[] = {
 	test_quat_rpy_conversions,
 	test_quat_mat_conversions,
 	test_qvectovec,
+	test_polytope,
 };
 
 static int i_test = -1;
