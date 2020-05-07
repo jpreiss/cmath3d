@@ -244,6 +244,103 @@ void test_polytope_projection()
 	printf("%s passed\n", __func__);
 }
 
+void test_polytope_ray()
+{
+	srand(1); // deterministic
+
+	// 1. Basic checks using an infinite rectangular "tube".
+	{
+		float const A[4][3] = {
+			{ 1.0f,  0.0f,  0.0f},
+			{ 0.0f,  1.0f,  0.0f},
+			{-1.0f,  0.0f,  0.0f},
+			{ 0.0f, -1.0f,  0.0f},
+		};
+		float const b[4] = {
+			1.0,
+			2.0,
+			3.0,
+			4.0,
+		};
+
+		float const *Aflat = &A[0][0];
+		int row = -1;
+
+		for (int i = 0; i < 4; ++i) {
+			// Test the face.
+			struct vec dir = vloadf(&A[i][0]);
+			float s = rayintersectpolytope(vzero(), dir, Aflat, b, 4, &row);
+			assert(s == b[i]); // No floating-point error expected.
+			assert(row == i);
+
+			// Test the corner.
+			int j = (i + 1) % 4;
+			struct vec next_dir = vloadf(&A[j][0]);
+			struct vec corner_us = vadd(
+				vscl(b[i] + 1e-6, dir),
+				vscl(b[j], next_dir)
+			);
+			rayintersectpolytope(vzero(), corner_us, Aflat, b, 4, &row);
+			assert(row == i);
+
+			struct vec corner_next = vadd(
+				vscl(b[i], dir),
+				vscl(b[j] + 1e-6, next_dir)
+			);
+			rayintersectpolytope(vzero(), corner_next, Aflat, b, 4, &row);
+			assert(row == j);
+		}
+
+		// Test the open ends of the tube.
+		float s = rayintersectpolytope(vzero(), mkvec(0, 0, 1), Aflat, b, 4, &row);
+		assert(isinf(s));
+
+		s = rayintersectpolytope(vzero(), mkvec(0, 0, -1), Aflat, b, 4, &row);
+		assert(isinf(s));
+
+		// Test that we can find very far away interesections.
+		s = rayintersectpolytope(vzero(), mkvec(0, 1e-9, -1), Aflat, b, 4, &row);
+		assert(!isinf(s));
+	}
+
+	// 2. Test that we handle loose-everywhere constraints.
+	{
+		float A[2][3];
+		float b[2];
+		struct vec v = randsphere();
+
+		vstoref(v, A[0]);
+		b[0] = 1.0;
+
+		vstoref(v, A[1]);
+		b[1] = 1.1;
+
+		int row;
+		float s = rayintersectpolytope(vscl(0.5, v), v, A[0], b, 2, &row);
+		assert(fcloseulps(s, 0.5, 10));
+	}
+
+	// 3. Test the stated behavior for empty polytopes.
+	{
+		float A[2][3];
+		float b[2];
+		struct vec v = randsphere();
+
+		vstoref(v, A[0]);
+		b[0] = -1.0;
+
+		vstoref(vneg(v), A[1]);
+		b[1] = -1.0;
+
+		int row;
+		float s = rayintersectpolytope(vscl(0.5, v), v, A[0], b, 2, &row);
+		assert(s < 0.0f);
+	}
+
+	// 4. Test random polytopes.
+
+	printf("%s passed\n", __func__);
+}
 
 // micro test framework
 typedef void (*voidvoid_fn)(void);
@@ -254,6 +351,7 @@ voidvoid_fn test_fns[] = {
 	test_quat_mat_conversions,
 	test_qvectovec,
 	test_polytope_projection,
+	test_polytope_ray,
 };
 
 static int i_test = -1;

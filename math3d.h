@@ -49,6 +49,22 @@ static inline float clamp(float value, float min, float max) {
   if (value > max) return max;
   return value;
 }
+// test two floats for approximate equality using the "consecutive floats have
+// consecutive bit representations" property. Argument `ulps` is the number of
+// steps to allow. this does not work well for numbers near zero.
+// See https://randomascii.wordpress.com/2012/02/25/comparing-floating-point-numbers-2012-edition/
+static inline bool fcloseulps(float a, float b, int ulps) {
+	if ((a < 0.0f) != (b < 0.0f)) {
+		// Handle negative zero.
+		if (a == b) {
+			return true;
+		}
+		return false;
+	}
+	int ia = *((int *)&a);
+	int ib = *((int *)&b);
+	return abs(ia - ib) <= ulps;
+}
 
 
 // ---------------------------- 3d vectors ------------------------------
@@ -832,6 +848,62 @@ static inline bool vinpolytope(struct vec v, float const A[], float const b[], i
 		}
 	}
 	return true;
+}
+
+// Finds the intersection between a ray and a convex polytope boundary.
+// The polytope is defined by the linear inequalities Ax <= b.
+// The ray must originate within the polytope.
+//
+// Args:
+//   origin: Origin of the ray. Must lie within the polytope.
+//   direction: Direction of the ray.
+//   A: n x 3 matrix, row-major. Each row must have L2 norm of 1.
+//   b: n vector.
+//   n: Number of inequalities (rows in A).
+//
+// Returns:
+//   s: positive float such that (origin + s * direction) is on the polytope
+//     boundary. If the ray does not intersect the polytope -- for example, if
+//     the polytope is unbounded -- then float INFINITY will be returned.
+//     If the polytope is empty, then a negative number will be returned.
+//     If `origin` does not lie within the polytope, return value is undefined.
+//   active_row: output argument. The row in A (face of the polytope) that
+//     the ray intersects. The point (origin + s * direction) will satisfy the
+//     equation in that row with equality. If the ray intersects the polytope
+//     at an intersection of two or more faces, active_row will be an arbitrary
+//     member of the intersecting set.
+//
+static inline float rayintersectpolytope(struct vec origin, struct vec direction, float const A[], float const b[], int n, int *active_row)
+{
+	#ifdef CMATH3D_ASSERTS
+	// check for normalized input.
+	for (int i = 0; i < n; ++i) {
+		struct vec a = vloadf(A + 3 * i);
+		assert(fabsf(vmag2(a) - 1.0f) < 1e-6f);
+	}
+	#endif
+
+	float min_s = INFINITY;
+	int min_row = -1;
+
+	for (int i = 0; i < n; ++i) {
+		struct vec a = vloadf(A + 3 * i);
+		float a_dir = vdot(a, direction);
+		if (a_dir <= 0.0f) {
+			// The ray points away from or parallel to the polytope face,
+			// so it will never intersect.
+			continue;
+		}
+		// Solve for the intersection point of this halfspace algebraically.
+		float s = (b[i] - vdot(a, origin)) / a_dir;
+		if (s < min_s) {
+			min_s = s;
+			min_row = i;
+		}
+	}
+
+	*active_row = min_row;
+	return min_s;
 }
 
 // Projects v onto the convex polytope defined by linear inequalities Ax <= b.
