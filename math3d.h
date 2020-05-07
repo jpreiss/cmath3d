@@ -835,17 +835,17 @@ static inline bool vinpolytope(struct vec v, float const A[], float const b[], i
 }
 
 // Projects v onto the convex polytope defined by linear inequalities Ax <= b.
-// Returns argmin_{x: Ax <= b} |x - v|_2. Uses Diykstra's (not Dijkstra's!)
-// projection algorithm [1].
+// Returns argmin_{x: Ax <= b} |x - v|_2. Uses Dykstra's (not Dijkstra's!)
+// projection algorithm [1] with robust stopping criteria [2].
 //
 // Args:
 //   v: vector to project into the polytope.
 //   A: n x 3 matrix, row-major. Each row must have L2 norm of 1.
 //   b: n vector.
 //   work: n x 3 matrix. will be overwritten. input values are not used.
-//   tolerance: Halt once iterates satisfy |x_{k + 1} - x_k|_2 < tolerance.
-//     Roughly, but not actually, equivalent to allowing constraint violations
-//     up to Ax >= b + tolerance.
+//   tolerance: Stop when *approximately* violates the polytope constraints
+//     by no more than this value. Not exact - be conservative if needed.
+//   maxiters: Terminate after this many iterations regardless of convergence.
 //
 // Returns:
 //   The projection of v into the polytope.
@@ -854,8 +854,11 @@ static inline bool vinpolytope(struct vec v, float const A[], float const b[], i
 //   [1] Boyle, J. P., and Dykstra, R. L. (1986). A Method for Finding
 //       Projections onto the Intersection of Convex Sets in Hilbert Spaces.
 //       Lecture Notes in Statistics, 28–47. doi:10.1007/978-1-4613-9940-7_3
+//   [2] Birgin, E. G., and Raydan, M. (2005). Robust Stopping Criteria for
+//       Dykstra's Algorithm. SIAM J. Scientific Computing 26(4): 1405-1414.
+//       doi:10.1137/03060062X
 //
-static inline struct vec vprojectpolytope(struct vec v, float const A[], float const b[], float work[], int n, float tolerance)
+static inline struct vec vprojectpolytope(struct vec v, float const A[], float const b[], float work[], int n, float tolerance, int maxiters)
 {
 	// early bailout.
 	if (vinpolytope(v, A, b, n, tolerance)) {
@@ -875,23 +878,31 @@ static inline struct vec vprojectpolytope(struct vec v, float const A[], float c
 		z[i] = 0.0f;
 	}
 
-	float const tolerance2 = fsqr(tolerance);
+	// For user-friendliness, we accept a tolerance value in terms of
+	// the Euclidean magnitude of the polytope violation. However, the
+	// stopping criteria we wish to use is the robust one of [2] -
+	// specifically, the expression called c_I^k - which is based on the
+	// sum of squared projection residuals. This is a feeble attempt to get
+	// a ballpark tolerance value that is roughly equivalent.
+	float const tolerance2 = n * fsqr(tolerance) / 10.0f;
 	struct vec x = v;
 
-	while (true) {
-		struct vec x_last_iter = x;
+	for (int iter = 0; iter < maxiters; ++iter) {
+		float c = 0.0f;
 		for (int i = 0; i < n; ++i) {
 			struct vec x_old = x;
 			struct vec ai = vloadf(A + 3 * i);
-			struct vec zi = vloadf(z + 3 * i);
-			x = vprojecthalfspace(vadd(x_old, zi), ai, b[i]);
-			struct vec zi_new = vadd3(x_old, zi, vneg(x));
-			vstoref(zi_new, z + 3 * i);
+			struct vec zi_old = vloadf(z + 3 * i);
+			x = vprojecthalfspace(vsub(x_old, zi_old), ai, b[i]);
+			struct vec zi = vadd3(x, vneg(x_old), zi_old);
+			vstoref(zi, z + 3 * i);
+			c += vdist2(zi_old, zi);
 		}
-		if (vdist2(x_last_iter, x) < tolerance2) {
+		if (c < tolerance2) {
 			return x;
 		}
 	}
+	return x;
 }
 
 

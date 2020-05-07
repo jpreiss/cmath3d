@@ -28,6 +28,13 @@ struct vec randcube() {
 	return mkvec(randu(-1.0f, 1.0f), randu(-1.0f, 1.0f), randu(-1.0f, 1.0f));
 }
 
+// returns a random vector sampled from a Gaussian with expected L2 norm of 1.
+// Note that this is *not* an identity covariance matrix.
+struct vec randnvec() {
+	struct vec v = mkvec(randn(), randn(), randn());
+	return vscl(1.0 / sqrtf(3.0), v);
+}
+
 // returns a random vector approximately uniformly sampled from the unit sphere
 struct vec randsphere() {
 	struct vec v = mkvec(randn(), randn(), randn());
@@ -53,6 +60,34 @@ do { \
 		assert(veqepsilon(a, b, epsilon)); \
 	} \
 } while(0) \
+
+// Generates n linear inequalities Ax <= b representing a convex polytope.
+//
+// The rows of A will be normalized to have L2 norm of 1.
+// The polytope interior will be non-empty.
+// The polytope may or may not contain the origin.
+// The polytope may or may not be bounded, but will be with high probability
+//   as n increases.
+// The returned interior point will be, on average, around 1 unit away
+//   from any polytope face.
+//
+// Returns a point in the polytope interior.
+struct vec randpolytope(float A[], float b[], int n) {
+	// If we generate random Ax <= b with b always positive, we ensure that
+	// x = 0 is always a solution; hence the polytope is non-empty. However,
+	// we also want to test nonempty polytopes that don't contain x = 0.
+	// Therefore, we use A(x - shift) <= b with b positive, which is
+	// equivalent to Ax <= b + Ashift.
+	struct vec shift = vscl(randu(0.0f, 4.0f), randsphere());
+
+	for (int i = 0; i < n; ++i) {
+		struct vec a = randsphere();
+		vstoref(a, A + 3 * i);
+		b[i] = randu(0.01f, 2.0f) + vdot(a, shift);
+	}
+
+	return shift;
+}
 
 
 //
@@ -154,7 +189,7 @@ void test_qvectovec()
 	printf("%s passed\n", __func__);
 }
 
-void test_polytope()
+void test_polytope_projection()
 {
 	srand(1); // deterministic
 
@@ -162,7 +197,9 @@ void test_polytope()
 	// and check that the projections are closer than other points.
 	int const N_POLYTOPES = 100;
 	int const N_PROJECTIONS = 10;
-	int const N_OTHERS = 1000;
+	int const N_OTHERS = 100;
+	float const TOLERANCE = 1e-6;
+	float const MAXITERS = 500;
 
 	int const MAX_FACES = 30;
 	float *A = malloc(sizeof(float) * MAX_FACES * 3);
@@ -175,35 +212,26 @@ void test_polytope()
 		// Random number of polytope faces.
 		int n = rand() % MAX_FACES + 1;
 
-		// If we generate random Ax <= b with b always positive, we ensure that
-		// x = 0 is always a solution; hence the polytope is non-empty. However,
-		// we also want to test nonempty polytopes that don't contain x = 0.
-		// Therefore, we use A(x + shift) <= b with b positive, which is
-		// equivalent to Ax <= b - Ashift.
-		struct vec shift = randsphere();
-
-		for (int i = 0; i < n; ++i) {
-			struct vec a = randsphere();
-			vstoref(a, A + 3 * i);
-			b[i] = randu(0.01, 10) - vdot(a, shift);
-		}
+		struct vec interior = randpolytope(A, b, n);
+		assert(vinpolytope(interior, A, b, n, 1e-10));
 
 		for (int point = 0; point < N_PROJECTIONS; ++point) {
+
 			struct vec x = randsphere();
-			struct vec xp = vprojectpolytope(x, A, b, work, n, 1e-6);
+			struct vec xp = vprojectpolytope(x, A, b, work, n, TOLERANCE, MAXITERS);
 
 			// Feasibility check: projection is inside polytope.
 			// The tolerance is looser than the vprojectpolytope tolerance
 			// because that tolerance doesn't actually guarantee a rigid bound
 			// on constraint violations.
-			assert(vinpolytope(xp, A, b, n, 1e-5));
+			assert(vinpolytope(xp, A, b, n, 10 * TOLERANCE));
 
 			// Optimality check: projection is closer than other random points
 			// to query point. Very large N_OTHERS would be more thorough...
 			for (int other = 0; other < N_OTHERS; ++other) {
-				struct vec other = vadd(randsphere(), shift);
+				struct vec other = vadd(randnvec(), interior);
 				if (vinpolytope(other, A, b, n, 0.0f)) {
-					assert (vdist2(xp, x) <= vdist2(other, x));
+					assert(vdist2(xp, x) <= vdist2(other, x));
 				}
 			}
 		}
@@ -216,6 +244,7 @@ void test_polytope()
 	printf("%s passed\n", __func__);
 }
 
+
 // micro test framework
 typedef void (*voidvoid_fn)(void);
 voidvoid_fn test_fns[] = {
@@ -224,7 +253,7 @@ voidvoid_fn test_fns[] = {
 	test_quat_rpy_conversions,
 	test_quat_mat_conversions,
 	test_qvectovec,
-	test_polytope,
+	test_polytope_projection,
 };
 
 static int i_test = -1;
