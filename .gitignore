@@ -1,5 +1,6 @@
-# test binary
+# test binaries
 test_math3d
+cov_math3d
 
 # Object files
 *.o
@@ -34,3 +35,8 @@ test_math3d
 # Debug files
 *.dSYM/
 *.su
+
+# Gcov output
+*.gcov
+*.gcda
+*.gcno
