@@ -28,13 +28,6 @@ struct vec randcube() {
 	return mkvec(randu(-1.0f, 1.0f), randu(-1.0f, 1.0f), randu(-1.0f, 1.0f));
 }
 
-// returns a random vector sampled from a Gaussian with expected L2 norm of 1.
-// Note that this is *not* an identity covariance matrix.
-struct vec randnvec() {
-	struct vec v = mkvec(randn(), randn(), randn());
-	return vscl(1.0 / sqrtf(3.0), v);
-}
-
 // returns a random vector approximately uniformly sampled from the unit sphere
 struct vec randsphere() {
 	struct vec v = mkvec(randn(), randn(), randn());
@@ -60,34 +53,6 @@ do { \
 		assert(veqepsilon(a, b, epsilon)); \
 	} \
 } while(0) \
-
-// Generates n linear inequalities Ax <= b representing a convex polytope.
-//
-// The rows of A will be normalized to have L2 norm of 1.
-// The polytope interior will be non-empty.
-// The polytope may or may not contain the origin.
-// The polytope may or may not be bounded, but will be with high probability
-//   as n increases.
-// The returned interior point will be, on average, around 1 unit away
-//   from any polytope face.
-//
-// Returns a point in the polytope interior.
-struct vec randpolytope(float A[], float b[], int n) {
-	// If we generate random Ax <= b with b always positive, we ensure that
-	// x = 0 is always a solution; hence the polytope is non-empty. However,
-	// we also want to test nonempty polytopes that don't contain x = 0.
-	// Therefore, we use A(x - shift) <= b with b positive, which is
-	// equivalent to Ax <= b + Ashift.
-	struct vec shift = vscl(randu(0.0f, 4.0f), randsphere());
-
-	for (int i = 0; i < n; ++i) {
-		struct vec a = randsphere();
-		vstoref(a, A + 3 * i);
-		b[i] = randu(0.01f, 2.0f) + vdot(a, shift);
-	}
-
-	return shift;
-}
 
 
 //
@@ -189,159 +154,6 @@ void test_qvectovec()
 	printf("%s passed\n", __func__);
 }
 
-void test_polytope_projection()
-{
-	srand(1); // deterministic
-
-	// For each polytope, generate a few points, project them,
-	// and check that the projections are closer than other points.
-	int const N_POLYTOPES = 100;
-	int const N_PROJECTIONS = 10;
-	int const N_OTHERS = 100;
-	float const TOLERANCE = 1e-6;
-	float const MAXITERS = 500;
-
-	int const MAX_FACES = 30;
-	float *A = malloc(sizeof(float) * MAX_FACES * 3);
-	float *b = malloc(sizeof(float) * MAX_FACES);
-	float *work = malloc(sizeof(float) * MAX_FACES * 3);
-
-
-	for (int trial = 0; trial < N_POLYTOPES; ++trial) {
-
-		// Random number of polytope faces.
-		int n = rand() % MAX_FACES + 1;
-
-		struct vec interior = randpolytope(A, b, n);
-		assert(vinpolytope(interior, A, b, n, 1e-10));
-
-		for (int point = 0; point < N_PROJECTIONS; ++point) {
-
-			struct vec x = randsphere();
-			struct vec xp = vprojectpolytope(x, A, b, work, n, TOLERANCE, MAXITERS);
-
-			// Feasibility check: projection is inside polytope.
-			// The tolerance is looser than the vprojectpolytope tolerance
-			// because that tolerance doesn't actually guarantee a rigid bound
-			// on constraint violations.
-			assert(vinpolytope(xp, A, b, n, 10 * TOLERANCE));
-
-			// Optimality check: projection is closer than other random points
-			// to query point. Very large N_OTHERS would be more thorough...
-			for (int other = 0; other < N_OTHERS; ++other) {
-				struct vec other = vadd(randnvec(), interior);
-				if (vinpolytope(other, A, b, n, 0.0f)) {
-					assert(vdist2(xp, x) <= vdist2(other, x));
-				}
-			}
-		}
-	}
-
-	free(A);
-	free(b);
-	free(work);
-
-	printf("%s passed\n", __func__);
-}
-
-void test_polytope_ray()
-{
-	srand(1); // deterministic
-
-	// 1. Basic checks using an infinite rectangular "tube".
-	{
-		float const A[4][3] = {
-			{ 1.0f,  0.0f,  0.0f},
-			{ 0.0f,  1.0f,  0.0f},
-			{-1.0f,  0.0f,  0.0f},
-			{ 0.0f, -1.0f,  0.0f},
-		};
-		float const b[4] = {
-			1.0,
-			2.0,
-			3.0,
-			4.0,
-		};
-
-		float const *Aflat = &A[0][0];
-		int row = -1;
-
-		for (int i = 0; i < 4; ++i) {
-			// Test the face.
-			struct vec dir = vloadf(&A[i][0]);
-			float s = rayintersectpolytope(vzero(), dir, Aflat, b, 4, &row);
-			assert(s == b[i]); // No floating-point error expected.
-			assert(row == i);
-
-			// Test the corner.
-			int j = (i + 1) % 4;
-			struct vec next_dir = vloadf(&A[j][0]);
-			struct vec corner_us = vadd(
-				vscl(b[i] + 1e-6, dir),
-				vscl(b[j], next_dir)
-			);
-			rayintersectpolytope(vzero(), corner_us, Aflat, b, 4, &row);
-			assert(row == i);
-
-			struct vec corner_next = vadd(
-				vscl(b[i], dir),
-				vscl(b[j] + 1e-6, next_dir)
-			);
-			rayintersectpolytope(vzero(), corner_next, Aflat, b, 4, &row);
-			assert(row == j);
-		}
-
-		// Test the open ends of the tube.
-		float s = rayintersectpolytope(vzero(), mkvec(0, 0, 1), Aflat, b, 4, &row);
-		assert(isinf(s));
-
-		s = rayintersectpolytope(vzero(), mkvec(0, 0, -1), Aflat, b, 4, &row);
-		assert(isinf(s));
-
-		// Test that we can find very far away interesections.
-		s = rayintersectpolytope(vzero(), mkvec(0, 1e-9, -1), Aflat, b, 4, &row);
-		assert(!isinf(s));
-	}
-
-	// 2. Test that we handle loose-everywhere constraints.
-	{
-		float A[2][3];
-		float b[2];
-		struct vec v = randsphere();
-
-		vstoref(v, A[0]);
-		b[0] = 1.0;
-
-		vstoref(v, A[1]);
-		b[1] = 1.1;
-
-		int row;
-		float s = rayintersectpolytope(vscl(0.5, v), v, A[0], b, 2, &row);
-		assert(fcloseulps(s, 0.5, 10));
-	}
-
-	// 3. Test the stated behavior for empty polytopes.
-	{
-		float A[2][3];
-		float b[2];
-		struct vec v = randsphere();
-
-		vstoref(v, A[0]);
-		b[0] = -1.0;
-
-		vstoref(vneg(v), A[1]);
-		b[1] = -1.0;
-
-		int row;
-		float s = rayintersectpolytope(vscl(0.5, v), v, A[0], b, 2, &row);
-		assert(s < 0.0f);
-	}
-
-	// 4. Test random polytopes.
-
-	printf("%s passed\n", __func__);
-}
-
 // micro test framework
 typedef void (*voidvoid_fn)(void);
 voidvoid_fn test_fns[] = {
@@ -350,8 +162,6 @@ voidvoid_fn test_fns[] = {
 	test_quat_rpy_conversions,
 	test_quat_mat_conversions,
 	test_qvectovec,
-	test_polytope_projection,
-	test_polytope_ray,
 };
 
 static int i_test = -1;

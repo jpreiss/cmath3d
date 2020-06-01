@@ -1,5 +1,5 @@
 # cmath3d
-3d math library for C. Vectors, 3x3 matrices, quaternions, polytopes. 32-bit floats.
+3d math library for C. Vectors, 3x3 matrices, quaternions. 32-bit floats.
 
 ## motivation
 This library is intended for embedded projects where C++ is not used.
