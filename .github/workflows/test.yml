@@ -11,6 +11,7 @@ jobs:
       run: make
     - name: test
       run: make test
-    - name: codecov
-      uses: codecov/codecov-action@v1
+    - name: coverage
       run: make coverage
+    - name: codecov upload
+      uses: codecov/codecov-action@v1
