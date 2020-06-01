@@ -28,6 +28,10 @@ SOFTWARE.
 #include <math.h>
 #include <stdbool.h>
 
+#ifdef CMATH3D_ASSERTS
+#include <assert.h>
+#endif
+
 #ifndef M_PI_F
 #define M_PI_F   (3.14159265358979323846f)
 #define M_1_PI_F (0.31830988618379067154f)
@@ -44,6 +48,22 @@ static inline float clamp(float value, float min, float max) {
   if (value < min) return min;
   if (value > max) return max;
   return value;
+}
+// test two floats for approximate equality using the "consecutive floats have
+// consecutive bit representations" property. Argument `ulps` is the number of
+// steps to allow. this does not work well for numbers near zero.
+// See https://randomascii.wordpress.com/2012/02/25/comparing-floating-point-numbers-2012-edition/
+static inline bool fcloseulps(float a, float b, int ulps) {
+	if ((a < 0.0f) != (b < 0.0f)) {
+		// Handle negative zero.
+		if (a == b) {
+			return true;
+		}
+		return false;
+	}
+	int ia = *((int *)&a);
+	int ib = *((int *)&b);
+	return abs(ia - ib) <= ulps;
 }
 
 
@@ -70,6 +90,12 @@ static inline struct vec vrepeat(float x) {
 // construct a zero-vector.
 static inline struct vec vzero(void) {
 	return vrepeat(0.0f);
+}
+// construct the i'th basis vector, i.e. vbasis(0) == (1, 0, 0).
+static inline struct vec vbasis(int i) {
+	float a[3] = {0.0f, 0.0f, 0.0f};
+	a[i] = 1.0f;
+	return mkvec(a[0], a[1], a[2]);
 }
 
 //
@@ -132,6 +158,14 @@ static inline float vdist(struct vec a, struct vec b) {
 // normalize a vector (make a unit vector).
 static inline struct vec vnormalize(struct vec v) {
 	return vdiv(v, vmag(v));
+}
+// clamp the Euclidean norm of a vector if it exceeds given maximum.
+static inline struct vec vclampnorm(struct vec v, float maxnorm) {
+	float const norm = vmag(v);
+	if (norm > maxnorm) {
+		return vscl(maxnorm / norm, v);
+	}
+	return v;
 }
 // vector cross product.
 static inline struct vec vcross(struct vec a, struct vec b) {
@@ -786,5 +820,190 @@ static inline struct quat qloadf(float const *f) {
 static inline void qstoref(struct quat q, float *f) {
 	f[0] = q.x; f[1] = q.y; f[2] = q.z; f[3] = q.w;
 }
+
+
+// ------------------------ convex polytopes in R^3 ---------------------------
+
+// Represents a system of linear inequalities Ax <= b defining a convex polytope in R^3.
+//
+// Unlike other types in cmath3d, struct polytope cannot manage its own memory
+// because polytopes may have an arbitrarily large number of faces. Algorithms
+// that require working memory proportional to the number of polytope faces
+// also take a "workspace" pointer argument. This makes the API more
+// cumbersome, but the only alternative is dynamic memory allocation, which
+// this library is not allowed to do.
+//
+// For optimization of some computations, we maintain the invariant that each
+// row of A is normalized.
+struct polytope
+{
+	float const *A;
+	float const *b;
+	int n;
+};
+
+// Normalizes the equations in Ax <= b such that each row in A has L2 norm 1.
+// Other functions assume this invariant, so `polytopenormalize` should be
+// called immediately after constructing a polytope unless the source of the
+// inequalities already guarantees that it is true.
+// NOTE: this function const-casts away the constness of p.A and p.b!
+static inline void polytopenormalize(struct polytope p)
+{
+	float *A = (float *)p.A;
+	float *b = (float *)p.b;
+	for (int i = 0; i < p.n; ++i) {
+		struct vec a = vloadf(A + 3*i);
+		float norm = vmag(a);
+		struct vec an = vdiv(a, norm);
+		vstoref(an, A + 3*i);
+		b[i] /= norm;
+	}
+}
+
+// project v onto the halfspace H = {x : a^T x <= b}, where a is a unit vector.
+// If v lies in H, returns v. Otherwise, returns the closest point, which
+// minimizes |x - v|_2, and will satisfy a^T x = b.
+static inline struct vec vprojecthalfspace(struct vec x, struct vec a_unit, float b) {
+	float ax = vdot(a_unit, x);
+	if (ax <= b) {
+		return x;
+	}
+	return vadd(x, vscl(b - ax, a_unit));
+}
+
+// test if v lies in the convex polytope. Allow violations up to Ax <= b + tolerance.
+static inline bool vinpolytope(struct polytope p, struct vec v, float tolerance)
+{
+	for (int i = 0; i < p.n; ++i) {
+		struct vec a = vloadf(p.A + 3 * i);
+		if (vdot(a, v) > p.b[i] + tolerance) {
+			return false;
+		}
+	}
+	return true;
+}
+
+// Finds the intersection between a ray and a convex polytope boundary.
+// The ray must originate within the polytope.
+//
+// Returns:
+//   s: positive float such that (origin + s * direction) is on the polytope
+//     boundary. If the ray does not intersect the polytope -- for example, if
+//     the polytope is unbounded -- then float INFINITY will be returned.
+//     If the polytope is empty, then a negative number will be returned.
+//     If `origin` does not lie within the polytope, return value is undefined.
+//   active_row: output argument. Optional, can be NULL.
+//     The row in A (face of the polytope) that the ray intersects. The point
+//     (origin + s * direction) will satisfy the equation in that row with
+//     equality. If the ray intersects the polytope at an intersection of two
+//     or more faces, active_row will be an arbitrary member of the
+//     intersecting set.
+//
+static inline float rayintersectpolytope(struct polytope const p, struct vec origin, struct vec direction, int *active_row)
+{
+	#ifdef CMATH3D_ASSERTS
+	// check for normalized input.
+	for (int i = 0; i < p.n; ++i) {
+		struct vec a = vloadf(p.A + 3 * i);
+		assert(fabsf(vmag2(a) - 1.0f) < 1e-6f);
+	}
+	#endif
+
+	float min_s = INFINITY;
+	int min_row = -1;
+
+	for (int i = 0; i < p.n; ++i) {
+		struct vec a = vloadf(p.A + 3 * i);
+		float a_dir = vdot(a, direction);
+		if (a_dir <= 0.0f) {
+			// The ray points away from or parallel to the polytope face,
+			// so it will never intersect.
+			continue;
+		}
+		// Solve for the intersection point of this halfspace algebraically.
+		float s = (p.b[i] - vdot(a, origin)) / a_dir;
+		if (s < min_s) {
+			min_s = s;
+			min_row = i;
+		}
+	}
+
+	if (active_row != NULL) {
+		*active_row = min_row;
+	}
+	return min_s;
+}
+
+// Projects v onto the convex polytope defined by linear inequalities Ax <= b.
+// Returns argmin_{x: Ax <= b} |x - v|_2. Uses Dykstra's (not Dijkstra's!)
+// projection algorithm [1] with robust stopping criteria [2].
+//
+// Args:
+//   v: vector to project into the polytope.
+//   A: n x 3 matrix, row-major. Each row must have L2 norm of 1.
+//   b: n vector.
+//   work: n x 3 matrix. will be overwritten. input values are not used.
+//   tolerance: Stop when *approximately* violates the polytope constraints
+//     by no more than this value. Not exact - be conservative if needed.
+//   maxiters: Terminate after this many iterations regardless of convergence.
+//
+// Returns:
+//   The projection of v into the polytope.
+//
+// References:
+//   [1] Boyle, J. P., and Dykstra, R. L. (1986). A Method for Finding
+//       Projections onto the Intersection of Convex Sets in Hilbert Spaces.
+//       Lecture Notes in Statistics, 28–47. doi:10.1007/978-1-4613-9940-7_3
+//   [2] Birgin, E. G., and Raydan, M. (2005). Robust Stopping Criteria for
+//       Dykstra's Algorithm. SIAM J. Scientific Computing 26(4): 1405-1414.
+//       doi:10.1137/03060062X
+//
+static inline struct vec vprojectpolytope(struct polytope p, struct vec v, float work[], float tolerance, int maxiters)
+{
+	// early bailout.
+	if (vinpolytope(p, v, tolerance)) {
+		return v;
+	}
+
+	#ifdef CMATH3D_ASSERTS
+	// check for normalized input.
+	for (int i = 0; i < p.n; ++i) {
+		struct vec a = vloadf(p.A + 3 * i);
+		assert(fabsf(vmag2(a) - 1.0f) < 1e-6f);
+	}
+	#endif
+
+	float *z = work;
+	for (int i = 0; i < 3 * p.n; ++i) {
+		z[i] = 0.0f;
+	}
+
+	// For user-friendliness, we accept a tolerance value in terms of
+	// the Euclidean magnitude of the polytope violation. However, the
+	// stopping criteria we wish to use is the robust one of [2] -
+	// specifically, the expression called c_I^k - which is based on the
+	// sum of squared projection residuals. This is a feeble attempt to get
+	// a ballpark tolerance value that is roughly equivalent.
+	float const tolerance2 = p.n * fsqr(tolerance) / 10.0f;
+	struct vec x = v;
+
+	for (int iter = 0; iter < maxiters; ++iter) {
+		float c = 0.0f;
+		for (int i = 0; i < p.n; ++i) {
+			struct vec x_old = x;
+			struct vec ai = vloadf(p.A + 3 * i);
+			struct vec zi_old = vloadf(z + 3 * i);
+			x = vprojecthalfspace(vsub(x_old, zi_old), ai, p.b[i]);
+			struct vec zi = vadd3(x, vneg(x_old), zi_old);
+			vstoref(zi, z + 3 * i);
+			c += vdist2(zi_old, zi);
+		}
+		if (c < tolerance2) {
+			return x;
+		}
+	}
+	return x;
+}
+
 
 // Overall TODO: lines? segments? planes? axis-aligned boxes? spheres?
