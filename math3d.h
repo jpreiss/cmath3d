@@ -50,6 +50,22 @@ static inline float clamp(float value, float min, float max) {
   if (value > max) return max;
   return value;
 }
+// test two floats for approximate equality using the "consecutive floats have
+// consecutive bit representations" property. Argument `ulps` is the number of
+// steps to allow. this does not work well for numbers near zero.
+// See https://randomascii.wordpress.com/2012/02/25/comparing-floating-point-numbers-2012-edition/
+static inline bool fcloseulps(float a, float b, int ulps) {
+	if ((a < 0.0f) != (b < 0.0f)) {
+		// Handle negative zero.
+		if (a == b) {
+			return true;
+		}
+		return false;
+	}
+	int ia = *((int *)&a);
+	int ib = *((int *)&b);
+	return abs(ia - ib) <= ulps;
+}
 
 
 // ---------------------------- 3d vectors ------------------------------
@@ -530,7 +546,6 @@ static inline struct quat qeye(void) {
 }
 // construct a quaternion from an axis and angle of rotation.
 // does not assume axis is normalized.
-// scaling the axis will NOT change the resulting quaternion.
 static inline struct quat qaxisangle(struct vec axis, float angle) {
 	float scale = sinf(angle / 2) / vmag(axis);
 	struct quat q;
