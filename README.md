@@ -1,4 +1,5 @@
 ![](https://github.com/jpreiss/cmath3d/workflows/test/badge.svg)
+![](https://img.shields.io/codecov/c/github/jpreiss/cmath3d/CI)
 
 # cmath3d
 3d math library for C. Vectors, 3x3 matrices, quaternions. 32-bit floats.
