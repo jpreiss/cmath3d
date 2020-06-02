@@ -96,10 +96,12 @@ void test_mat_axisangle()
 	printf("%s passed\n", __func__);
 }
 
-void test_quat_rpy_conversions()
+void test_quat_conversions()
 {
 	srand(0); // deterministic
 	int const N = 10000;
+
+	// rpy->quat->rpy
 	for (int i = 0; i < N; ++i) {
 		float yaw   = randu(-0.98f*M_PI_F, 0.98f*M_PI_F); // quat2rpy never outputs outside [-pi, pi]
 		float pitch = randu(-0.48f*M_PI_F, 0.48f*M_PI_F); // avoid singularity
@@ -108,21 +110,49 @@ void test_quat_rpy_conversions()
 		struct vec rpy1 = quat2rpy(rpy2quat(rpy0));
 		ASSERT_VEQ_EPSILON(rpy0, rpy1, 0.00001f); // must be fairly loose due to 32 bit trig, etc.
 	}
-	printf("%s passed\n", __func__);
-}
 
-void test_quat_mat_conversions()
-{
-	srand(0); // deterministic
-	int const N = 10000;
+	// quat->matrix->quat
 	for (int i = 0; i < N; ++i) {
 		struct quat const q = randquat();
 		struct mat33 const m = quat2rotmat(q);
 		struct quat const qq = mat2quat(m);
 		float const angle = qanglebetween(q, qq);
 		// TODO: seems like a lot of precision loss -- can we improve?
-		assert(fabs(angle) < radians(0.1f));
+		assert(fabsf(angle) < radians(0.1f));
 	}
+
+	// quat->axis/angle->quat
+	for (int i = 0; i < N; ++i) {
+		struct quat const q = randquat();
+		struct vec qaxis = quat2axis(q);
+		float qangle = quat2angle(q);
+		struct quat qq = qaxisangle(qaxis, qangle);
+		float const angle = qanglebetween(q, qq);
+		// TODO: seems like a lot of precision loss -- can we improve?
+		assert(fabsf(angle) < radians(0.1f));
+	}
+
+	// axis/angle->quat->axis/angle
+	for (int i = 0; i < N; ++i) {
+		struct vec axis = randcube();
+		float angle = randn();
+		if (fabsf(angle) < 1e-3) {
+			// conversion is not stable for small angles.
+			continue;
+		}
+		struct quat q = qaxisangle(axis, angle);
+		struct vec qaxis = quat2axis(q);
+		float qangle = quat2angle(q);
+		float anorm = vmag(axis);
+		float qanorm = vmag(qaxis);
+		float dot = vdot(vdiv(axis, anorm), vdiv(qaxis, qanorm));
+		assert(fabsf(dot) >= (1.0f - 1e-6f));
+		if (dot < 0) {
+			qangle *= -1.0f;
+		}
+		assert(fabsf(qangle - angle) < 1e-4);
+	}
+
 	printf("%s passed\n", __func__);
 }
 
@@ -190,8 +220,7 @@ typedef void (*voidvoid_fn)(void);
 voidvoid_fn test_fns[] = {
 	test_vec_basic,
 	test_mat_axisangle,
-	test_quat_rpy_conversions,
-	test_quat_mat_conversions,
+	test_quat_conversions,
 	test_qvectovec,
 	test_qslerp,
 };
