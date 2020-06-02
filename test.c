@@ -120,7 +120,8 @@ void test_quat_mat_conversions()
 		struct mat33 const m = quat2rotmat(q);
 		struct quat const qq = mat2quat(m);
 		float const angle = qanglebetween(q, qq);
-		assert(fabs(angle) < radians(1e-4));
+		// TODO: seems like a lot of precision loss -- can we improve?
+		assert(fabs(angle) < radians(0.1f));
 	}
 	printf("%s passed\n", __func__);
 }
@@ -154,6 +155,36 @@ void test_qvectovec()
 	printf("%s passed\n", __func__);
 }
 
+void test_qslerp()
+{
+	srand(0); // deterministic
+
+	int const N = 10000;
+
+	for (int i = 0; i < N; ++i) {
+		// two random quaternions
+		struct quat a = randquat();
+		struct quat b = randquat();
+
+		// construct quaternion dq such that b = (dq)^steps * a
+		int steps = 1 + rand() % 5;
+		float t = 1.0 / steps;
+		struct quat q = qslerp(a, b, t);
+		struct quat dq = qqmul(q, qinv(a));
+
+		// verify
+		struct quat b2 = a;
+		for (int s = 0; s < steps; ++s) {
+			b2 = qqmul(dq, b2);
+		}
+		float angle = qanglebetween(b, b2);
+
+		// TODO: seems like a lot of precision loss -- can we improve?
+		assert(angle <= radians(0.1f));
+	}
+	printf("%s passed\n", __func__);
+}
+
 // micro test framework
 typedef void (*voidvoid_fn)(void);
 voidvoid_fn test_fns[] = {
@@ -162,6 +193,7 @@ voidvoid_fn test_fns[] = {
 	test_quat_rpy_conversions,
 	test_quat_mat_conversions,
 	test_qvectovec,
+	test_qslerp,
 };
 
 static int i_test = -1;
