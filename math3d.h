@@ -530,6 +530,7 @@ static inline struct quat qeye(void) {
 }
 // construct a quaternion from an axis and angle of rotation.
 // does not assume axis is normalized.
+// scaling the axis will NOT change the resulting quaternion.
 static inline struct quat qaxisangle(struct vec axis, float angle) {
 	float scale = sinf(angle / 2) / vmag(axis);
 	struct quat q;
