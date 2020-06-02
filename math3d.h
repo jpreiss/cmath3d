@@ -564,6 +564,7 @@ static inline struct quat qeye(void) {
 }
 // construct a quaternion from an axis and angle of rotation.
 // does not assume axis is normalized.
+// scaling the axis will NOT change the resulting quaternion.
 static inline struct quat qaxisangle(struct vec axis, float angle) {
 	float scale = sinf(angle / 2) / vmag(axis);
 	struct quat q;
@@ -747,8 +748,8 @@ static inline float qdot(struct quat a, struct quat b) {
 static inline float qanglebetween(struct quat a, struct quat b) {
 	float const dot = qdot(qposreal(a), qposreal(b));
 	// prevent acos domain issues
-	if (dot > 1.0f - 1e9f) return 0.0f;
-	if (dot < -1.0f + 1e9f) return M_PI_F;
+	if (dot > 1.0f - 1e-9f) return 0.0f;
+	if (dot < -1.0f + 1e-9f) return M_PI_F;
 	return acosf(dot);
 }
 static inline bool qeq(struct quat a, struct quat b) {
