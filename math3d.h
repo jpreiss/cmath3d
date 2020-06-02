@@ -28,6 +28,11 @@ SOFTWARE.
 #include <math.h>
 #include <stdbool.h>
 
+// gcov doesn't work properly if functions are inlined.
+#ifdef CMATH3D_COVERAGE
+#define inline
+#endif
+
 #ifndef M_PI_F
 #define M_PI_F   (3.14159265358979323846f)
 #define M_1_PI_F (0.31830988618379067154f)
