@@ -15,5 +15,4 @@ jobs:
       run: |
         make coverage
         rm test.c.gcov
-    - name: codecov upload
-      uses: codecov/codecov-action@v1
+        bash <(curl -s https://codecov.io/bash) -X gcov
