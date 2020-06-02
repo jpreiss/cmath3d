@@ -59,6 +59,30 @@ do { \
 // tests - when adding new tests, make sure to add to test_fns array
 //
 
+void test_scalar()
+{
+	for (int i = 0; i < 10000; ++i) {
+		float a = randn();
+		float b = randn();
+		int steps = expf(randu(0.0f, 8.0f)) - 1;
+		float c = a;
+		for (int i = 0; i < steps; ++i) {
+			c = nextafterf(c, b);
+		}
+		assert(fcloseulps(a, c, steps));
+		assert(!fcloseulps(a, c, steps - 1));
+	}
+
+	assert(fcloseulps(radians(degrees(1.0f)), 1.0f, 1));
+	assert(fcloseulps(radians(degrees(-7.0f)), -7.0f, 1));
+
+	assert(clamp( 1.0f, 0.0f, 2.0f) == 1.0f);
+	assert(clamp( 3.0f, 0.0f, 2.0f) == 2.0f);
+	assert(clamp(-1.0f, 0.0f, 2.0f) == 0.0f);
+
+	printf("%s passed\n", __func__);
+}
+
 void test_vec_basic()
 {
 	struct vec v = mkvec(1.0f, 2.0f, 3.0f);
@@ -218,6 +242,7 @@ void test_qslerp()
 // micro test framework
 typedef void (*voidvoid_fn)(void);
 voidvoid_fn test_fns[] = {
+	test_scalar,
 	test_vec_basic,
 	test_mat_axisangle,
 	test_quat_conversions,
