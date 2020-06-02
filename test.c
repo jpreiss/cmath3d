@@ -239,6 +239,37 @@ void test_qslerp()
 	printf("%s passed\n", __func__);
 }
 
+void test_quat_lowprecision()
+{
+	srand(20); // deterministic
+
+	int const N = 10000;
+
+	for (int i = 0; i < N; ++i) {
+		struct vec rpy = vscl(1e-2f, randcube());
+		struct quat exact = rpy2quat(rpy);
+		struct quat approx = rpy2quat_small(rpy);
+		assert(qanglebetween(exact, approx) < 1e-3f);
+	}
+
+	for (int i = 0; i < N; ++i) {
+		struct vec gyro = randsphere();
+		struct quat init = randquat();
+		int steps = 100;
+		float t = randu(0.1, 2.0);
+		float dt = t / steps;
+		struct quat q = init;
+		for (int j = 0; j < steps; ++j) {
+			q = quat_gyro_update(q, gyro, dt);
+		}
+		struct quat target = qqmul(qaxisangle(gyro, t), init);
+		assert(qanglebetween(q, target) < 1e-6f);
+	}
+
+	printf("%s passed\n", __func__);
+}
+
+
 // micro test framework
 typedef void (*voidvoid_fn)(void);
 voidvoid_fn test_fns[] = {
@@ -248,6 +279,7 @@ voidvoid_fn test_fns[] = {
 	test_quat_conversions,
 	test_qvectovec,
 	test_qslerp,
+	test_quat_lowprecision,
 };
 
 static int i_test = -1;
