@@ -713,8 +713,8 @@ static inline float qdot(struct quat a, struct quat b) {
 static inline float qanglebetween(struct quat a, struct quat b) {
 	float const dot = qdot(qposreal(a), qposreal(b));
 	// prevent acos domain issues
-	if (dot > 1.0f - 1e9f) return 0.0f;
-	if (dot < -1.0f + 1e9f) return M_PI_F;
+	if (dot > 1.0f - 1e-9f) return 0.0f;
+	if (dot < -1.0f + 1e-9f) return M_PI_F;
 	return acosf(dot);
 }
 static inline bool qeq(struct quat a, struct quat b) {
