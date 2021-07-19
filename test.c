@@ -185,6 +185,22 @@ void test_qvectovec()
 	printf("%s passed\n", __func__);
 }
 
+void test_qqmul()
+{
+	srand(0); // deterministic
+	int const N = 10000;
+
+	for (int i = 0; i < N; ++i) {
+		struct quat q = randquat();
+		struct quat p = randquat();
+		struct vec v = randcube();
+		struct vec q_pv = qvrot(q, qvrot(p, v));
+		struct vec qp_v = qvrot(qqmul(q, p), v);
+		ASSERT_VEQ_EPSILON(q_pv, qp_v, 1e-6f);
+	}
+	printf("%s passed\n", __func__);
+}
+
 void test_qslerp()
 {
 	srand(0); // deterministic
@@ -252,6 +268,7 @@ voidvoid_fn test_fns[] = {
 	test_vec_basic,
 	test_mat_axisangle,
 	test_quat_conversions,
+	test_qqmul,
 	test_qvectovec,
 	test_qslerp,
 	test_quat_lowprecision,
