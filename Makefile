@@ -1,4 +1,4 @@
-CFLAGS = -std=c99 -Werror -Wall -Wpedantic -Wdouble-promotion
+CFLAGS = -std=c99 -Werror -Wall -Wpedantic -Wdouble-promotion -Wno-error=unused-function
 TESTFLAGS = -DCMATH3D_ASSERTS -g
 
 test_math3d: test.c math3d.h
