@@ -136,7 +136,7 @@ void test_quat_conversions()
 	for (int i = 0; i < N; ++i) {
 		struct vec axis = randcube();
 		float angle = randn();
-		if (fabsf(angle) < 1e-3) {
+		if (fabsf(angle) < 1e-3f) {
 			// conversion is not stable for small angles.
 			continue;
 		}
@@ -150,7 +150,7 @@ void test_quat_conversions()
 		if (dot < 0) {
 			qangle *= -1.0f;
 		}
-		assert(fabsf(qangle - angle) < 1e-4);
+		assert(fabsf(qangle - angle) < 1e-4f);
 	}
 
 	printf("%s passed\n", __func__);
@@ -165,7 +165,7 @@ void test_qvectovec()
 	for (int i = 0; i < N; ++i) {
 		struct vec a = randcube(), b = randcube();
 		// do not try to normalize tiny vectors.
-		if (vmag2(a) < 1e-8 || vmag2(b) < 1e-8) continue;
+		if (vmag2(a) < 1e-8f || vmag2(b) < 1e-8f) continue;
 		a = vnormalize(a);
 		b = vnormalize(b);
 		// degenerate case - test explicitly, not accidentally.

@@ -172,11 +172,11 @@ static inline struct vec vclampabs(struct vec v, struct vec abs_upper) {
 }
 // largest scalar element of vector.
 static inline float vmaxelt(struct vec v) {
-	return fmax(fmax(v.x, v.y), v.z);
+	return fmaxf(fmaxf(v.x, v.y), v.z);
 }
 // least (most negative) scalar element of vector.
 static inline float vminelt(struct vec v) {
-	return fmin(fmin(v.x, v.y), v.z);
+	return fminf(fminf(v.x, v.y), v.z);
 }
 // L1 norm (aka Minkowski, Taxicab, Manhattan norm) of a vector.
 static inline float vnorm1(struct vec v) {
@@ -562,8 +562,8 @@ static inline struct quat qvectovec(struct vec a, struct vec b) {
 	}
 	float const halfcos = 0.5f * cosangle;
 	// since angle is < 180deg, the positive sqrt is always correct
-	float const sinhalfangle = sqrtf(fmax(0.5f - halfcos, 0.0f));
-	float const coshalfangle = sqrtf(fmax(0.5f + halfcos, 0.0f));
+	float const sinhalfangle = sqrtf(fmaxf(0.5f - halfcos, 0.0f));
+	float const coshalfangle = sqrtf(fmaxf(0.5f + halfcos, 0.0f));
 	struct vec const qimag = vscl(sinhalfangle / sinangle, cross);
 	float const qreal = coshalfangle;
 	return quatvw(qimag, qreal);
@@ -604,13 +604,13 @@ static inline struct quat rpy2quat_small(struct vec rpy) {
 }
 // construct quaternion from orthonormal matrix.
 static inline struct quat mat2quat(struct mat33 m) {
-	float w = sqrtf(fmax(0.0f, 1.0f + m.m[0][0] + m.m[1][1] + m.m[2][2])) / 2.0f;
-	float x = sqrtf(fmax(0.0f, 1.0f + m.m[0][0] - m.m[1][1] - m.m[2][2])) / 2.0f;
-	float y = sqrtf(fmax(0.0f, 1.0f - m.m[0][0] + m.m[1][1] - m.m[2][2])) / 2.0f;
-	float z = sqrtf(fmax(0.0f, 1.0f - m.m[0][0] - m.m[1][1] + m.m[2][2])) / 2.0f;
-	x = copysign(x, m.m[2][1] - m.m[1][2]);
-	y = copysign(y, m.m[0][2] - m.m[2][0]);
-	z = copysign(z, m.m[1][0] - m.m[0][1]);
+	float w = sqrtf(fmaxf(0.0f, 1.0f + m.m[0][0] + m.m[1][1] + m.m[2][2])) / 2.0f;
+	float x = sqrtf(fmaxf(0.0f, 1.0f + m.m[0][0] - m.m[1][1] - m.m[2][2])) / 2.0f;
+	float y = sqrtf(fmaxf(0.0f, 1.0f - m.m[0][0] + m.m[1][1] - m.m[2][2])) / 2.0f;
+	float z = sqrtf(fmaxf(0.0f, 1.0f - m.m[0][0] - m.m[1][1] + m.m[2][2])) / 2.0f;
+	x = copysignf(x, m.m[2][1] - m.m[1][2]);
+	y = copysignf(y, m.m[0][2] - m.m[2][0]);
+	z = copysignf(z, m.m[1][0] - m.m[0][1]);
 	return mkquat(x, y, z, w);
 }
 
@@ -656,15 +656,15 @@ static inline struct mat33 quat2rotmat(struct quat q) {
 	float w = q.w;
 
 	struct mat33 m;
-	m.m[0][0] = 1 - 2*y*y - 2*z*z;
-	m.m[0][1] = 2*x*y - 2*z*w;
-	m.m[0][2] = 2*x*z + 2*y*w,
-	m.m[1][0] = 2*x*y + 2*z*w;
-	m.m[1][1] = 1 - 2*x*x - 2*z*z;
-	m.m[1][2] = 2*y*z - 2*x*w,
-	m.m[2][0] = 2*x*z - 2*y*w;
-	m.m[2][1] = 2*y*z + 2*x*w;
-	m.m[2][2] = 1 - 2*x*x - 2*y*y;
+	m.m[0][0] = 1.0f - 2.0f*y*y - 2.0f*z*z;
+	m.m[0][1] = 2.0f*x*y - 2.0f*z*w;
+	m.m[0][2] = 2.0f*x*z + 2.0f*y*w,
+	m.m[1][0] = 2.0f*x*y + 2.0f*z*w;
+	m.m[1][1] = 1.0f - 2.0f*x*x - 2.0f*z*z;
+	m.m[1][2] = 2.0f*y*z - 2.0f*x*w,
+	m.m[2][0] = 2.0f*x*z - 2.0f*y*w;
+	m.m[2][1] = 2.0f*y*z + 2.0f*x*w;
+	m.m[2][2] = 1.0f - 2.0f*x*x - 2.0f*y*y;
 	return m;
 }
 
