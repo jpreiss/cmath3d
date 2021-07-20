@@ -564,7 +564,7 @@ static inline struct quat qvectovec(struct vec a, struct vec b) {
 	// since angle is < 180deg, the positive sqrt is always correct
 	float const sinhalfangle = sqrtf(fmaxf(0.5f - halfcos, 0.0f));
 	float const coshalfangle = sqrtf(fmaxf(0.5f + halfcos, 0.0f));
-	struct vec const qimag = vscl(sinhalfangle / sinangle, cross);
+	struct vec const qimag = vscl(-sinhalfangle / sinangle, cross);
 	float const qreal = coshalfangle;
 	return quatvw(qimag, qreal);
 }
@@ -678,8 +678,8 @@ static inline struct vec qvrot(struct quat q, struct vec v) {
 	struct vec qv = mkvec(q.x, q.y, q.z);
 	return vadd3(
 		vscl(2.0f * vdot(qv, v), qv),
-		vscl(q.w * q.w - vmag2(qv), v),
-		vscl(2.0f * q.w, vcross(qv, v))
+		vscl(2.0f * q.w * q.w - 1.0f, v),
+		vscl(-2.0f * q.w, vcross(qv, v))
 	);
 }
 // multiply (compose) two quaternions
@@ -707,16 +707,22 @@ static inline struct quat qposreal(struct quat q) {
 	if (q.w < 0) return qneg(q);
 	return q;
 }
-// quaternion dot product. is cosine of angle between them.
+// quaternion dot product. is cosine of half the angle between them.
 static inline float qdot(struct quat a, struct quat b) {
 	return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
 }
 static inline float qanglebetween(struct quat a, struct quat b) {
-	float const dot = qdot(qposreal(a), qposreal(b));
+	float const dot = qdot(a, b);
 	// prevent acos domain issues
-	if (dot > 1.0f - 1e-9f) return 0.0f;
-	if (dot < -1.0f + 1e-9f) return M_PI_F;
-	return acosf(dot);
+	float acos;
+	if (dot > 1.0f) acos = 0.0f;
+	else if (dot < -1.0f) acos = M_PI_F;
+	else acos = acosf(dot);
+	float angle = 2.0f * acos;
+	if (angle >= M_PI_F) {
+		angle -= 2.0f * M_PI_F;
+	}
+	return angle;
 }
 static inline bool qeq(struct quat a, struct quat b) {
 	return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w;

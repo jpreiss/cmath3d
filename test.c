@@ -96,6 +96,27 @@ void test_mat_axisangle()
 	printf("%s passed\n", __func__);
 }
 
+void test_qanglebetween()
+{
+	srand(0); // deterministic
+	int const N = 10000;
+
+	for (int i = 0; i < N; ++i) {
+		struct quat p = randquat();
+		struct vec axis = randcube();
+		float angle = randn();
+		struct quat diff = qaxisangle(axis, angle);
+		struct quat q = qqmul(p, diff);
+		float angle2 = qanglebetween(p, q);
+		// TODO: Is this really the best precision we can get?
+		// Failure case seems to be small angles - bad conditioning of acos near 1.
+		if (fabsf(angle2 - fabsf(angle)) >= radians(1e-1f)) {
+			assert(fabsf(angle2 - fabsf(angle)) < radians(1e-1f));
+		}
+	}
+	printf("%s passed\n", __func__);
+}
+
 void test_quat_conversions()
 {
 	srand(0); // deterministic
@@ -226,7 +247,7 @@ void test_qslerp()
 		float angle = qanglebetween(b, b2);
 
 		// TODO: seems like a lot of precision loss -- can we improve?
-		assert(angle <= radians(0.1f));
+		assert(angle <= radians(0.3f));
 	}
 	printf("%s passed\n", __func__);
 }
@@ -267,6 +288,7 @@ typedef void (*voidvoid_fn)(void);
 voidvoid_fn test_fns[] = {
 	test_vec_basic,
 	test_mat_axisangle,
+	test_qanglebetween,
 	test_quat_conversions,
 	test_qqmul,
 	test_qvectovec,
